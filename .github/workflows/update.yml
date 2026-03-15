@@ -2,7 +2,8 @@ name: Update Bootstrap Node Lists
 
 on:
   schedule:
-    # Run every 6 hours
+    # Run every 6 hours.  The step below skips processing when all.json
+    # hasn't changed since the last successful run.
     - cron: '0 */6 * * *'
   push:
     branches:
@@ -16,6 +17,10 @@ on:
 
 permissions:
   contents: write
+
+env:
+  ALL_JSON_URL: "https://raw.githubusercontent.com/ethereum/discv4-dns-lists/master/all.json"
+  STATE_FILE: "output/.state"
 
 jobs:
   update:
@@ -34,11 +39,42 @@ jobs:
       - name: Build filter tool
         run: go build -o filter_nodes .
 
-      - name: Run filter (download latest all.json and write output/)
-        run: ./filter_nodes -config chains_config.json
+      - name: Download all.json and check for changes
+        id: check
+        run: |
+          echo "Downloading all.json from $ALL_JSON_URL ..."
+          curl -fsSL "$ALL_JSON_URL" -o /tmp/all.json
+
+          NEW_SHA=$(sha256sum /tmp/all.json | awk '{print $1}')
+          OLD_SHA=""
+          if [ -f "$STATE_FILE" ]; then
+            OLD_SHA=$(cat "$STATE_FILE")
+          fi
+
+          echo "Stored SHA : ${OLD_SHA:0:16}..."
+          echo "Current SHA: ${NEW_SHA:0:16}..."
+
+          if [ -n "$OLD_SHA" ] && [ "$NEW_SHA" = "$OLD_SHA" ]; then
+            echo "all.json unchanged — skipping filter run"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "all.json has changed (or first run)"
+            echo "changed=true"  >> "$GITHUB_OUTPUT"
+            echo "new_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run filter (write output/{chain}.json files)
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          ./filter_nodes -config chains_config.json -input /tmp/all.json
 
       - name: Run discovery summary
-        run: ./filter_nodes -config chains_config.json -discover 2>/dev/null || true
+        if: steps.check.outputs.changed == 'true'
+        run: ./filter_nodes -config chains_config.json -input /tmp/all.json -discover 2>/dev/null || true
+
+      - name: Update state file (record processed all.json SHA)
+        if: steps.check.outputs.changed == 'true'
+        run: echo "${{ steps.check.outputs.new_sha }}" > "$STATE_FILE"
 
       - name: Commit and push updated node lists
         run: |

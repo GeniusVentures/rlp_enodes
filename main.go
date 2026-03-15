@@ -2,25 +2,28 @@
 // repository, decodes each node's ENR record, identifies which EVM-compatible
 // chain the node belongs to, determines the dominant (current) fork ID per chain,
 // then writes ranked JSON files of the top bootstrap peers for each configured
-// chain into the output directory.
+// chain directly into the output directory as {chain-name}.json.
 //
-// Supported filter strategies:
+// Supported filter strategies (filterType):
 //
 //   - geth_network    uses go-ethereum forkid.NewStaticFilter so it accepts every
-//     node on the same chain regardless of current fork level
-//     (mainnet, sepolia, holesky, hoodi).
+//     node on the same chain regardless of current fork level.
+//     Supported networks: mainnet, sepolia, holesky, hoodi.
 //
 //   - enr_field       accepts nodes that advertise a specific ENR key (e.g. "bsc"
-//     for BNB Smart Chain nodes).
+//     for BNB Smart Chain nodes).  When forkHashes is ALSO set,
+//     both conditions must match (compound AND filter).
 //
 //   - fork_hash_list  accepts nodes whose current eth fork hash appears in the
-//     configured forkHashes list.  Use this for chains that are
-//     not supported by the geth_network filter.  Run with
-//     -discover to print a ranked list of all observed fork
+//     configured forkHashes list.  When enrField is ALSO set,
+//     both conditions must match (compound AND filter).
+//     Run with -discover to print a ranked list of all observed fork
 //     hashes and identify which hash belongs to which chain.
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -58,14 +61,17 @@ type AppConfig struct {
 //   - "geth_network"   – go-ethereum forkid filter; requires "network".
 //   - "enr_field"      – presence of a specific ENR key; requires "enrField".
 //   - "fork_hash_list" – eth fork hash exact match; requires "forkHashes".
+//
+// Compound AND: set both enrField AND forkHashes together with either
+// "enr_field" or "fork_hash_list" as filterType to require both conditions.
 type ChainConfig struct {
 	Name        string   `json:"name"`
 	ChainID     int      `json:"chainId"`
 	Description string   `json:"description,omitempty"`
 	FilterType  string   `json:"filterType"`
 	Network     string   `json:"network,omitempty"`    // geth_network
-	EnrField    string   `json:"enrField,omitempty"`   // enr_field
-	ForkHashes  []string `json:"forkHashes,omitempty"` // fork_hash_list
+	EnrField    string   `json:"enrField,omitempty"`   // enr_field (or compound)
+	ForkHashes  []string `json:"forkHashes,omitempty"` // fork_hash_list (or compound)
 	TopN        int      `json:"topN,omitempty"`
 }
 
@@ -87,7 +93,7 @@ type NodeRecord struct {
 // Output types
 // ---------------------------------------------------------------------------
 
-// OutputNode is one entry in an output latest-nodes.json file.
+// OutputNode is one entry in an output {chain}.json file.
 type OutputNode struct {
 	ENR          string    `json:"enr"`
 	NodeID       string    `json:"nodeId"`
@@ -117,7 +123,7 @@ type candidateNode struct {
 
 func main() {
 	configPath := flag.String("config", "chains_config.json", "path to chains_config.json")
-	inputFile := flag.String("input", "", "local all.json file (skip download if set)")
+	inputFile := flag.String("input", "", "local all.json file to use instead of downloading")
 	discover := flag.Bool("discover", false, "print fork-hash discovery summary and exit")
 	flag.Parse()
 
@@ -135,7 +141,7 @@ func main() {
 	if err := json.Unmarshal(raw, &allNodes); err != nil {
 		log.Fatalf("parse all.json: %v", err)
 	}
-	log.Printf("Loaded %d nodes from all.json", len(allNodes))
+	log.Printf("Loaded %d nodes from all.json (SHA256=%s...)", len(allNodes), shortSHA(raw))
 
 	if *discover {
 		printDiscovery(allNodes)
@@ -150,6 +156,9 @@ func main() {
 	if outDir == "" {
 		outDir = "output"
 	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		log.Fatalf("mkdir %s: %v", outDir, err)
+	}
 
 	for _, chain := range cfg.Chains {
 		topN := chain.TopN
@@ -160,6 +169,13 @@ func main() {
 			log.Printf("ERROR processing chain %s: %v", chain.Name, err)
 		}
 	}
+}
+
+// shortSHA returns the first 16 hex characters of the SHA-256 of b,
+// suitable for log messages.
+func shortSHA(b []byte) string {
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])[:16]
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +253,7 @@ func printDiscovery(allNodes map[string]NodeRecord) {
 		}
 	}
 
-	// Sort by count descending.
+	// Sort by totalScore descending (same metric used for dominant fork selection).
 	type row struct {
 		hash  string
 		stats *fhStats
@@ -247,10 +263,13 @@ func printDiscovery(allNodes map[string]NodeRecord) {
 		rows = append(rows, row{h, s})
 	}
 	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].stats.totalScore != rows[j].stats.totalScore {
+			return rows[i].stats.totalScore > rows[j].stats.totalScore
+		}
 		return rows[i].stats.count > rows[j].stats.count
 	})
 
-	fmt.Println("Fork hash discovery summary (run this to identify chain fork hashes):")
+	fmt.Println("Fork hash discovery summary (sorted by total score; use to identify chain fork hashes):")
 	fmt.Printf("%-12s %7s %12s  %s\n", "FORK_HASH", "NODES", "TOTAL_SCORE", "EXTRA_ENR_KEYS")
 	for _, r := range rows {
 		keys := ""
@@ -297,7 +316,7 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 	}
 	log.Printf("[%s] Matched %d nodes (all fork versions)", chain.Name, len(candidates))
 
-	// Step 2: find the dominant fork hash (highest weighted node count).
+	// Step 2: find the dominant fork hash (highest aggregate score).
 	dominant := dominantForkHash(candidates)
 	log.Printf("[%s] Dominant fork hash: %s", chain.Name, dominant)
 
@@ -330,17 +349,13 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 		output = append(output, toOutputNode(c))
 	}
 
-	// Step 7: write JSON atomically.
-	chainDir := filepath.Join(outputDir, chain.Name)
-	if err := os.MkdirAll(chainDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir %s: %w", chainDir, err)
-	}
+	// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
+	outPath := filepath.Join(outputDir, chain.Name+".json")
+	tmpPath := outPath + ".tmp"
 	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
-	outPath := filepath.Join(chainDir, "latest-nodes.json")
-	tmpPath := outPath + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
 		return fmt.Errorf("write tmp: %w", err)
 	}
@@ -358,23 +373,55 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 // nodeFilter returns true if the node belongs to the target chain.
 type nodeFilter func(*enode.Node) bool
 
+// buildFilter constructs a node filter from a ChainConfig.
+//
+// Compound AND behaviour: if both enrField and forkHashes are present, the
+// returned filter requires BOTH conditions to match simultaneously.  This
+// lets you narrow a chain-specific ENR field (e.g. "bsc") to a specific
+// fork version (e.g. testnet vs mainnet).
 func buildFilter(chain ChainConfig) (nodeFilter, error) {
+	var filters []nodeFilter
+
 	switch chain.FilterType {
 	case "geth_network":
-		return buildGethFilter(chain.Network)
+		f, err := buildGethFilter(chain.Network)
+		if err != nil {
+			return nil, err
+		}
+		filters = append(filters, f)
 	case "enr_field":
 		if chain.EnrField == "" {
 			return nil, fmt.Errorf("enr_field filter requires enrField")
 		}
-		return buildEnrFieldFilter(chain.EnrField), nil
+		filters = append(filters, buildEnrFieldFilter(chain.EnrField))
 	case "fork_hash_list":
 		if len(chain.ForkHashes) == 0 {
-			return nil, fmt.Errorf("fork_hash_list filter requires at least one entry in forkHashes; run with -discover to find them")
+			return nil, fmt.Errorf("fork_hash_list filter requires forkHashes; run -discover to find them")
 		}
-		return buildForkHashListFilter(chain.ForkHashes), nil
+		filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
 	default:
 		return nil, fmt.Errorf("unknown filterType %q", chain.FilterType)
 	}
+
+	// Compound AND: add secondary conditions when both fields are present.
+	if chain.FilterType != "enr_field" && chain.EnrField != "" {
+		filters = append(filters, buildEnrFieldFilter(chain.EnrField))
+	}
+	if chain.FilterType != "fork_hash_list" && len(chain.ForkHashes) > 0 {
+		filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
+	}
+
+	if len(filters) == 1 {
+		return filters[0], nil
+	}
+	return func(n *enode.Node) bool {
+		for _, f := range filters {
+			if !f(n) {
+				return false
+			}
+		}
+		return true
+	}, nil
 }
 
 // buildGethFilter uses go-ethereum's forkid.NewStaticFilter evaluated at genesis
@@ -444,7 +491,7 @@ func extractForkID(n *enode.Node) (hashHex string, next uint64) {
 }
 
 // dominantForkHash returns the fork hash (hex) with the highest aggregate node
-// score across candidates.  Score-weighted counting ensures that high-quality
+// score across candidates.  Score-weighted selection ensures that high-quality
 // nodes drive the selection rather than stale low-score nodes.
 func dominantForkHash(candidates []candidateNode) string {
 	type stats struct {
