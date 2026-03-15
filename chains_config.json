@@ -1,0 +1,139 @@
+{
+  "allJsonURL": "https://raw.githubusercontent.com/ethereum/discv4-dns-lists/master/all.json",
+  "outputDir": "output",
+  "defaultTopN": 100,
+  "chains": [
+    {
+      "name": "ethereum-mainnet",
+      "chainId": 1,
+      "description": "Ethereum Mainnet",
+      "filterType": "geth_network",
+      "network": "mainnet",
+      "topN": 100
+    },
+    {
+      "name": "ethereum-sepolia",
+      "chainId": 11155111,
+      "description": "Ethereum Sepolia Testnet",
+      "filterType": "geth_network",
+      "network": "sepolia",
+      "topN": 100
+    },
+    {
+      "name": "ethereum-holesky",
+      "chainId": 17000,
+      "description": "Ethereum Holesky Testnet",
+      "filterType": "geth_network",
+      "network": "holesky",
+      "topN": 100
+    },
+    {
+      "name": "ethereum-hoodi",
+      "chainId": 560048,
+      "description": "Ethereum Hoodi Testnet",
+      "filterType": "geth_network",
+      "network": "hoodi",
+      "topN": 100
+    },
+    {
+      "name": "bnb-smart-chain",
+      "chainId": 56,
+      "description": "BNB Smart Chain Mainnet — identified by the 'bsc' ENR field; dominant fork auto-selected",
+      "filterType": "enr_field",
+      "enrField": "bsc",
+      "topN": 100
+    },
+    {
+      "name": "bnb-smart-chain-testnet",
+      "chainId": 97,
+      "description": "BNB Smart Chain Chapel Testnet — compound filter: 'bsc' ENR field AND non-mainnet fork hash. Run -discover to update forkHashes after Chapel upgrades.",
+      "filterType": "enr_field",
+      "enrField": "bsc",
+      "forkHashes": [
+        "0f4a4493",
+        "f361ca40",
+        "545f2501",
+        "504f0b4c"
+      ],
+      "topN": 50
+    },
+    {
+      "name": "polygon-mainnet",
+      "chainId": 137,
+      "description": "Polygon PoS Mainnet — fork hashes from bor ChainConfig (reflection forks; skip block-0). Run -discover after bor upgrades.",
+      "filterType": "fork_hash_list",
+      "forkHashes": [
+        "0e07e722",
+        "f6e6f13f",
+        "4ee4877d",
+        "3884b734",
+        "afc3c0f4",
+        "164d5593",
+        "692e139b"
+      ],
+      "topN": 100
+    },
+    {
+      "name": "polygon-amoy",
+      "chainId": 80002,
+      "description": "Polygon Amoy Testnet — fork hashes from bor AmoyChainConfig. Run -discover after bor upgrades.",
+      "filterType": "fork_hash_list",
+      "forkHashes": [
+        "be06a477",
+        "c184b23e",
+        "a4c2839a",
+        "3d8d8a1d"
+      ],
+      "topN": 50
+    },
+    {
+      "name": "base-mainnet",
+      "chainId": 8453,
+      "description": "Base Mainnet (OP Stack) — timestamp fork hashes from Canyon through Isthmus. Run -discover after upgrades.",
+      "filterType": "fork_hash_list",
+      "forkHashes": [
+        "cf8548d1",
+        "2c6e51e4",
+        "8408f6db",
+        "6d50a2d6",
+        "6e567dc4",
+        "5de08065",
+        "405435c6",
+        "943d8bab"
+      ],
+      "topN": 100
+    },
+    {
+      "name": "base-sepolia",
+      "chainId": 84532,
+      "description": "Base Sepolia Testnet (OP Stack) — timestamp fork hashes from Canyon through Isthmus. Run -discover after upgrades.",
+      "filterType": "fork_hash_list",
+      "forkHashes": [
+        "eab69adf",
+        "fcdf6b04",
+        "06a2777e",
+        "c2fa9d6e",
+        "73c6bef8",
+        "eb85361a",
+        "624a89b0",
+        "1b2c996c"
+      ],
+      "topN": 50
+    },
+    {
+      "name": "gnosis-chain",
+      "chainId": 100,
+      "description": "Gnosis Chain (xDai) — fork hashes from genesis through Cancun. Run -discover to verify current dominant hash.",
+      "filterType": "fork_hash_list",
+      "forkHashes": [
+        "f64909b1",
+        "6bac960a",
+        "6fe9f8c9",
+        "fd7cdcc7",
+        "b48bbf10",
+        "0edfb34d"
+      ],
+      "topN": 100
+    }
+  ]
+}
