@@ -38,9 +38,6 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Build filter tool
-        run: go build -o filter_nodes .
-
       - name: Check if all.json has been updated (via GitHub API)
         id: check
         env:
@@ -74,6 +71,10 @@ jobs:
             echo "changed=true"            >> "$GITHUB_OUTPUT"
             echo "new_commit=$LATEST_COMMIT" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Build filter tool
+        if: steps.check.outputs.changed == 'true'
+        run: go build -o filter_nodes .
 
       - name: Run filter (write output/{chain}.json files)
         if: steps.check.outputs.changed == 'true'
