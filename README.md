@@ -1,4 +1,4 @@
-# rlp_discv4_nodes — EVM Bootstrap Node Filter
+# rlp_enodes — EVM Bootstrap Node Filter
 
 Automated system that downloads the latest
 [`all.json`](https://github.com/ethereum/discv4-dns-lists) crawl from the
