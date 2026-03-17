@@ -154,7 +154,7 @@ jobs:
 
           s3.put_object(
               Bucket='gnusai',
-              Key='chain_enodes.gz',
+              Key='chain_enodes.json.gz',
               Body=compressed,
               ContentType='application/json',
               ContentEncoding='gzip',
