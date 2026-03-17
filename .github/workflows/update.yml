@@ -2,7 +2,7 @@ name: Update Bootstrap Node Lists
 
 on:
   schedule:
-    # Run every 6 hours.  The check step uses the GitHub API to detect whether
+    # Run every 6 hours. The check job uses the GitHub API to detect whether
     # all.json has actually changed before downloading the large file.
     - cron: '0 */6 * * *'
   push:
@@ -14,6 +14,11 @@ on:
       - 'go.mod'
       - 'go.sum'
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force rebuild (skip change detection and assume all.json changed)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -25,18 +30,32 @@ env:
   STATE_FILE: "output/.state"
 
 jobs:
-  update:
-    name: Download & filter discv4 node lists
+  check:
+    name: Decide whether to run
     runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.decide.outputs.should_run }}
+      new_commit: ${{ steps.decide.outputs.new_commit }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check if all.json has been updated (via GitHub API)
-        id: check
+      - name: Decide (force vs changed)
+        id: decide
         env:
           GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
         run: |
+          set -euo pipefail
+
+          # If force=true, do not hit the GitHub API at all.
+          if [ "${FORCE}" = "true" ]; then
+            echo "Force rebuild requested; skipping change detection."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "new_commit=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Use the GitHub API to get the latest commit SHA that touched all.json.
           # This is a tiny (~1 KB) API response — no need to download the full file.
           LATEST_COMMIT=$(gh api \
@@ -57,37 +76,46 @@ jobs:
           echo "Latest commit : ${LATEST_COMMIT:0:7}..."
 
           if [ -n "$OLD_COMMIT" ] && [ "$LATEST_COMMIT" = "$OLD_COMMIT" ]; then
-            echo "all.json unchanged — skipping filter run"
-            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "all.json unchanged — skipping run"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "new_commit=$LATEST_COMMIT" >> "$GITHUB_OUTPUT"
           else
-            echo "all.json has changed (or first run) — downloading..."
-            curl -fsSL "$ALL_JSON_URL" -o /tmp/all.json
-            echo "changed=true"            >> "$GITHUB_OUTPUT"
+            echo "all.json changed (or first run) — will run"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "new_commit=$LATEST_COMMIT" >> "$GITHUB_OUTPUT"
           fi
 
+  update:
+    name: Download & filter discv4 node lists
+    needs: check
+    if: needs.check.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all.json
+        run: curl -fsSL "$ALL_JSON_URL" -o /tmp/all.json
+
       - name: Set up Go
-        if: steps.check.outputs.changed == 'true'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Build filter tool
-        if: steps.check.outputs.changed == 'true'
         run: go build -o filter_nodes .
 
       - name: Run filter (write output/{chain}.json files)
-        if: steps.check.outputs.changed == 'true'
         run: ./filter_nodes -config chains_config.json -input /tmp/all.json
 
       - name: Run discovery summary
-        if: steps.check.outputs.changed == 'true'
         run: ./filter_nodes -config chains_config.json -input /tmp/all.json -discover 2>/dev/null || true
 
       - name: Update state file (record processed all.json commit SHA)
-        if: steps.check.outputs.changed == 'true'
-        run: echo "${{ steps.check.outputs.new_commit }}" > "$STATE_FILE"
+        # If force=true, we intentionally don't compute/record a new upstream commit.
+        if: ${{ inputs.force != true && needs.check.outputs.new_commit != '' }}
+        run: echo "${{ needs.check.outputs.new_commit }}" > "$STATE_FILE"
 
       - name: Commit and push updated node lists
         run: |
@@ -102,7 +130,6 @@ jobs:
           fi
 
       - name: Upload chain_enodes.gz to Cloudflare R2
-        if: steps.check.outputs.changed == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
