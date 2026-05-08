@@ -37,6 +37,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/params"
@@ -96,6 +97,7 @@ type NodeRecord struct {
 // OutputNode is one entry in an output {chain}.json file.
 type OutputNode struct {
 	ENR          string    `json:"enr"`
+	Enode        string    `json:"enode,omitempty"`
 	NodeID       string    `json:"nodeId"`
 	Score        int       `json:"score"`
 	LastResponse time.Time `json:"lastResponse,omitempty"`
@@ -570,10 +572,18 @@ func toOutputNode(c candidateNode) OutputNode {
 		ForkID:       c.forkHash,
 		ForkNext:     c.forkNext,
 	}
+	if enodeURL := c.node.URLv4(); enodeURL != "" {
+		out.Enode = enodeURL
+	}
+	if pubkey := c.node.Pubkey(); pubkey != nil {
+		out.NodeID = fmt.Sprintf("%x", crypto.FromECDSAPub(pubkey)[1:])
+	}
 	if ip := c.node.IP(); ip != nil {
 		out.IP = ip.String()
 	}
-	if port := c.node.UDP(); port > 0 {
+	if port := c.node.TCP(); port > 0 {
+		out.Port = port
+	} else if port := c.node.UDP(); port > 0 {
 		out.Port = port
 	}
 	return out

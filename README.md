@@ -34,17 +34,21 @@ Each `{chain}.json` is an array of objects sorted by `score` (descending) then
 [
   {
     "enr":          "enr:-...",
-    "nodeId":       "04d70a61...",
+    "enode":        "enode://<128-hex-pubkey>@162.55.86.114:30311",
+    "nodeId":       "<128-hex-secp256k1-pubkey>",
     "score":        3371,
     "lastResponse": "2026-03-14T20:54:48Z",
     "forkId":       "4d518ce1",
     "forkNext":     0,
     "ip":           "162.55.86.114",
     "port":         30311
-  },
-  ...
+  }
 ]
 ```
+
+`nodeId`, `enode`, `ip`, and `port` are derived from the decoded ENR itself.
+`nodeId` is the 64-byte uncompressed secp256k1 public key (hex, without `0x04`).
+`port` prefers the ENR TCP port and falls back to UDP only when TCP is absent.
 
 ## Automation
 
