@@ -22,6 +22,7 @@
 package main
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -30,9 +31,12 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core"
@@ -62,6 +66,9 @@ type AppConfig struct {
 //   - "geth_network"   – go-ethereum forkid filter; requires "network".
 //   - "enr_field"      – presence of a specific ENR key; requires "enrField".
 //   - "fork_hash_list" – eth fork hash exact match; requires "forkHashes".
+//   - "bootnodes_yaml" – external YAML list of ENR bootnodes; requires "sourceUrl".
+//   - "bootnodes_go"   – external Go file containing a named []string bootnode list;
+//     requires "sourceUrl" and "sourceKey".
 //
 // Compound AND: set both enrField AND forkHashes together with either
 // "enr_field" or "fork_hash_list" as filterType to require both conditions.
@@ -70,6 +77,8 @@ type ChainConfig struct {
 	ChainID     int      `json:"chainId"`
 	Description string   `json:"description,omitempty"`
 	FilterType  string   `json:"filterType"`
+	SourceURL   string   `json:"sourceUrl,omitempty"`
+	SourceKey   string   `json:"sourceKey,omitempty"`
 	Network     string   `json:"network,omitempty"`    // geth_network
 	EnrField    string   `json:"enrField,omitempty"`   // enr_field (or compound)
 	ForkHashes  []string `json:"forkHashes,omitempty"` // fork_hash_list (or compound)
@@ -98,7 +107,7 @@ type NodeRecord struct {
 type OutputNode struct {
 	ENR          string    `json:"enr"`
 	Enode        string    `json:"enode,omitempty"`
-	NodeID       string    `json:"nodeId"`
+	Pubkey       string    `json:"pubkey"`
 	Score        int       `json:"score"`
 	LastResponse time.Time `json:"lastResponse,omitempty"`
 	ForkID       string    `json:"forkId,omitempty"`
@@ -226,6 +235,129 @@ func loadAllJSON(localFile, url string) ([]byte, error) {
 	return io.ReadAll(resp.Body)
 }
 
+func loadTextURL(url string) ([]byte, error) {
+	log.Printf("Downloading external source from %s", url)
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("http get: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("http status %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+func loadBootnodesYAML(url string) ([]string, error) {
+	if url == "" {
+		return nil, fmt.Errorf("missing sourceUrl")
+	}
+
+	raw, err := loadTextURL(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var bootnodes []string
+	scanner := bufio.NewScanner(strings.NewReader(string(raw)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "- ") {
+			continue
+		}
+
+		value := strings.TrimSpace(strings.TrimPrefix(line, "- "))
+		value = strings.Trim(value, `"'`)
+		if value == "" {
+			continue
+		}
+		bootnodes = append(bootnodes, value)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return bootnodes, nil
+}
+
+func loadBootnodesGo(url string, sourceKey string) ([]string, error) {
+	if url == "" {
+		return nil, fmt.Errorf("missing sourceUrl")
+	}
+	if sourceKey == "" {
+		return nil, fmt.Errorf("missing sourceKey")
+	}
+
+	raw, err := loadTextURL(url)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		bootnodes []string
+		inBlock   bool
+	)
+	startMarker := fmt.Sprintf("var %s = []string{", sourceKey)
+	scanner := bufio.NewScanner(strings.NewReader(string(raw)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !inBlock {
+			if strings.HasPrefix(line, startMarker) {
+				inBlock = true
+			}
+			continue
+		}
+
+		if strings.HasPrefix(line, "}") {
+			break
+		}
+
+		start := strings.IndexByte(line, '"')
+		if start == -1 {
+			continue
+		}
+		end := strings.LastIndexByte(line, '"')
+		if end <= start {
+			continue
+		}
+		value, err := strconv.Unquote(line[start : end+1])
+		if err != nil || value == "" {
+			continue
+		}
+		bootnodes = append(bootnodes, value)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if !inBlock {
+		return nil, fmt.Errorf("sourceKey %q not found", sourceKey)
+	}
+
+	return bootnodes, nil
+}
+
+func normalizeGoBootnode(record string) string {
+	if !strings.HasPrefix(record, "enode://") {
+		return record
+	}
+
+	parsed, err := url.Parse(record)
+	if err != nil {
+		return record
+	}
+	if parsed.Host == "" || strings.Contains(parsed.Host, ":") {
+		return record
+	}
+
+	discport := parsed.Query().Get("discport")
+	if discport == "" {
+		return record
+	}
+
+	return fmt.Sprintf("enode://%s@%s:%s", parsed.User.Username(), parsed.Host, discport)
+}
+
 // ---------------------------------------------------------------------------
 // Discovery mode
 // ---------------------------------------------------------------------------
@@ -299,6 +431,13 @@ func printDiscovery(allNodes map[string]NodeRecord) {
 // ---------------------------------------------------------------------------
 
 func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int) ([]OutputNode, error) {
+	if chain.FilterType == "bootnodes_yaml" {
+		return processBootnodesYAMLChain(chain, outputDir, topN)
+	}
+	if chain.FilterType == "bootnodes_go" {
+		return processBootnodesGOChain(chain, outputDir, topN)
+	}
+
 	filter, err := buildFilter(chain)
 	if err != nil {
 		return nil, fmt.Errorf("build filter: %w", err)
@@ -326,42 +465,60 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 
 	if len(candidates) == 0 {
 		log.Printf("[%s] No matching nodes found", chain.Name)
-		return nil, nil
-	}
-	log.Printf("[%s] Matched %d nodes (all fork versions)", chain.Name, len(candidates))
+	} else {
+		log.Printf("[%s] Matched %d nodes (all fork versions)", chain.Name, len(candidates))
 
-	// Step 2: find the dominant fork hash (highest aggregate score).
-	dominant := dominantForkHash(candidates)
-	log.Printf("[%s] Dominant fork hash: %s", chain.Name, dominant)
+		// Step 2: find the dominant fork hash (highest aggregate score).
+		dominant := dominantForkHash(candidates)
+		log.Printf("[%s] Dominant fork hash: %s", chain.Name, dominant)
 
-	// Step 3: filter to dominant fork hash only.
-	var filtered []candidateNode
-	for _, c := range candidates {
-		if c.forkHash == dominant {
-			filtered = append(filtered, c)
+		// Step 3: filter to dominant fork hash only.
+		var filtered []candidateNode
+		for _, c := range candidates {
+			if c.forkHash == dominant {
+				filtered = append(filtered, c)
+			}
 		}
-	}
-	log.Printf("[%s] Nodes on dominant fork: %d", chain.Name, len(filtered))
+		log.Printf("[%s] Nodes on dominant fork: %d", chain.Name, len(filtered))
 
-	// Step 4: rank by score desc, then lastResponse desc.
-	sort.Slice(filtered, func(i, j int) bool {
-		si, sj := filtered[i].record.Score, filtered[j].record.Score
-		if si != sj {
-			return si > sj
+		// Step 4: rank by score desc, then lastResponse desc.
+		sort.Slice(filtered, func(i, j int) bool {
+			si, sj := filtered[i].record.Score, filtered[j].record.Score
+			if si != sj {
+				return si > sj
+			}
+			return filtered[i].record.LastResponse.After(filtered[j].record.LastResponse)
+		})
+
+		// Step 5: cap at topN.
+		if len(filtered) > topN {
+			filtered = filtered[:topN]
 		}
-		return filtered[i].record.LastResponse.After(filtered[j].record.LastResponse)
-	})
 
-	// Step 5: cap at topN.
-	if len(filtered) > topN {
-		filtered = filtered[:topN]
+		// Step 6: marshal to OutputNode slice.
+		output := make([]OutputNode, 0, len(filtered))
+		for _, c := range filtered {
+			output = append(output, toOutputNode(c))
+		}
+
+		// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
+		outPath := filepath.Join(outputDir, chain.Name+".json")
+		tmpPath := outPath + ".tmp"
+		data, err := json.MarshalIndent(output, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("marshal: %w", err)
+		}
+		if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+			return nil, fmt.Errorf("write tmp: %w", err)
+		}
+		if err := os.Rename(tmpPath, outPath); err != nil {
+			return nil, fmt.Errorf("rename: %w", err)
+		}
+		log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), outPath)
+		return output, nil
 	}
 
-	// Step 6: marshal to OutputNode slice.
-	output := make([]OutputNode, 0, len(filtered))
-	for _, c := range filtered {
-		output = append(output, toOutputNode(c))
-	}
+	output := []OutputNode{}
 
 	// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
 	outPath := filepath.Join(outputDir, chain.Name+".json")
@@ -377,6 +534,83 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 		return nil, fmt.Errorf("rename: %w", err)
 	}
 	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), outPath)
+	return output, nil
+}
+
+func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
+	bootnodes, err := loadBootnodesYAML(chain.SourceURL)
+	if err != nil {
+		return nil, fmt.Errorf("load bootnodes yaml: %w", err)
+	}
+	return processBootnodeRecords(chain.Name, bootnodes, outputDir, topN)
+}
+
+func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
+	bootnodes, err := loadBootnodesGo(chain.SourceURL, chain.SourceKey)
+	if err != nil {
+		return nil, fmt.Errorf("load bootnodes go: %w", err)
+	}
+	for i := range bootnodes {
+		bootnodes[i] = normalizeGoBootnode(bootnodes[i])
+	}
+	return processBootnodeRecords(chain.Name, bootnodes, outputDir, topN)
+}
+
+func processBootnodeRecords(chainName string, bootnodes []string, outputDir string, topN int) ([]OutputNode, error) {
+	output := make([]OutputNode, 0, len(bootnodes))
+	for _, record := range bootnodes {
+		n, err := enode.Parse(enode.ValidSchemes, record)
+		if err != nil {
+			continue
+		}
+
+		out := OutputNode{}
+		if strings.HasPrefix(record, "enr:") {
+			out.ENR = record
+		}
+		if enodeURL := n.URLv4(); enodeURL != "" {
+			out.Enode = enodeURL
+		}
+		if pubkey := n.Pubkey(); pubkey != nil {
+			out.Pubkey = fmt.Sprintf("%x", crypto.FromECDSAPub(pubkey)[1:])
+		}
+		if forkHash, forkNext := extractForkID(n); forkHash != "" {
+			out.ForkID = forkHash
+			out.ForkNext = forkNext
+		}
+		if ip := n.IP(); ip != nil {
+			out.IP = ip.String()
+		}
+		if port := n.TCP(); port > 0 {
+			out.Port = port
+		} else if port := n.UDP(); port > 0 {
+			out.Port = port
+		}
+
+		output = append(output, out)
+	}
+
+	if len(output) == 0 {
+		log.Printf("[%s] No matching nodes found", chainName)
+	}
+
+	if len(output) > topN {
+		output = output[:topN]
+	}
+
+	outPath := filepath.Join(outputDir, chainName+".json")
+	tmpPath := outPath + ".tmp"
+	data, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return nil, fmt.Errorf("write tmp: %w", err)
+	}
+	if err := os.Rename(tmpPath, outPath); err != nil {
+		return nil, fmt.Errorf("rename: %w", err)
+	}
+	log.Printf("[%s] Wrote %d nodes → %s", chainName, len(output), outPath)
 	return output, nil
 }
 
@@ -432,6 +666,10 @@ func buildFilter(chain ChainConfig) (nodeFilter, error) {
 			return nil, fmt.Errorf("fork_hash_list filter requires forkHashes; run -discover to find them")
 		}
 		filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
+	case "bootnodes_yaml":
+		return nil, fmt.Errorf("bootnodes_yaml is handled before filter construction")
+	case "bootnodes_go":
+		return nil, fmt.Errorf("bootnodes_go is handled before filter construction")
 	default:
 		return nil, fmt.Errorf("unknown filterType %q", chain.FilterType)
 	}
@@ -566,7 +804,7 @@ func dominantForkHash(candidates []candidateNode) string {
 func toOutputNode(c candidateNode) OutputNode {
 	out := OutputNode{
 		ENR:          c.record.Record,
-		NodeID:       c.nodeID,
+		Pubkey:       c.nodeID,
 		Score:        c.record.Score,
 		LastResponse: c.record.LastResponse,
 		ForkID:       c.forkHash,
@@ -576,7 +814,7 @@ func toOutputNode(c candidateNode) OutputNode {
 		out.Enode = enodeURL
 	}
 	if pubkey := c.node.Pubkey(); pubkey != nil {
-		out.NodeID = fmt.Sprintf("%x", crypto.FromECDSAPub(pubkey)[1:])
+		out.Pubkey = fmt.Sprintf("%x", crypto.FromECDSAPub(pubkey)[1:])
 	}
 	if ip := c.node.IP(); ip != nil {
 		out.IP = ip.String()

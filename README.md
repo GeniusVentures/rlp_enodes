@@ -35,7 +35,7 @@ Each `{chain}.json` is an array of objects sorted by `score` (descending) then
   {
     "enr":          "enr:-...",
     "enode":        "enode://<128-hex-pubkey>@162.55.86.114:30311",
-    "nodeId":       "<128-hex-secp256k1-pubkey>",
+    "pubkey":       "<128-hex-secp256k1-pubkey>",
     "score":        3371,
     "lastResponse": "2026-03-14T20:54:48Z",
     "forkId":       "4d518ce1",
@@ -46,8 +46,8 @@ Each `{chain}.json` is an array of objects sorted by `score` (descending) then
 ]
 ```
 
-`nodeId`, `enode`, `ip`, and `port` are derived from the decoded ENR itself.
-`nodeId` is the 64-byte uncompressed secp256k1 public key (hex, without `0x04`).
+`pubkey`, `enode`, `ip`, and `port` are derived from the decoded ENR itself.
+`pubkey` is the 64-byte uncompressed secp256k1 public key (hex, without `0x04`).
 `port` prefers the ENR TCP port and falls back to UDP only when TCP is absent.
 
 ## Automation
@@ -83,6 +83,8 @@ go build -o filter_nodes .
 | `geth_network`    | Uses `go-ethereum`'s `forkid.NewStaticFilter` to accept **any** node on the same genesis chain regardless of fork level.  Supported networks: `mainnet`, `sepolia`, `holesky`, `hoodi`. |
 | `enr_field`       | Accepts nodes that carry a specific ENR key (e.g. `bsc` for BNB Smart Chain). |
 | `fork_hash_list`  | Accepts nodes whose `eth` fork hash is in the configured `forkHashes` list. |
+| `bootnodes_yaml`  | Loads a chain from an external YAML list of ENR bootnodes via `sourceUrl`. |
+| `bootnodes_go`    | Loads a chain from a named `[]string` bootnode slice in an external Go source file via `sourceUrl` + `sourceKey`. |
 
 ### Compound AND filter
 
@@ -103,9 +105,9 @@ both advertise the `bsc` ENR key but at different fork hashes.
 | BNB Smart Chain Testnet | 97 | `enr_field: bsc` + `fork_hash_list` (compound) |
 | Polygon PoS Mainnet | 137 | `fork_hash_list` |
 | Polygon Amoy Testnet | 80002 | `fork_hash_list` |
-| Base Mainnet | 8453 | `fork_hash_list` |
-| Base Sepolia Testnet | 84532 | `fork_hash_list` |
-| Gnosis Chain (xDai) | 100 | `fork_hash_list` |
+| Base Mainnet | 8453 | `bootnodes_go` |
+| Base Sepolia Testnet | 84532 | `bootnodes_go` |
+| Gnosis Chain (xDai) | 100 | `bootnodes_yaml` |
 
 ## Adding or updating chains
 
@@ -113,8 +115,8 @@ both advertise the `bsc` ENR key but at different fork hashes.
 2. Run `./filter_nodes -discover` (or `-input` + `-discover`) to print a ranked
    table of all fork hashes observed in the crawl.  Chain-specific ENR keys
    (e.g. `bsc(2709)`) help identify which hash belongs to which chain.
-3. Cross-reference the top hashes with the chain's release notes.
-4. Add the hash(es) to the chain's `forkHashes` array.
+3. For `fork_hash_list`, cross-reference the top hashes with the chain's release notes.
+4. Add the hash(es) to the chain's `forkHashes` array, or for `bootnodes_yaml` / `bootnodes_go` set the external source fields.
 5. Re-run to verify results.
 
 ### Known Ethereum fork hash progression (March 2026)

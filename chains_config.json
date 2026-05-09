@@ -50,10 +50,7 @@
       "filterType": "enr_field",
       "enrField": "bsc",
       "forkHashes": [
-        "0f4a4493",
-        "f361ca40",
-        "545f2501",
-        "504f0b4c"
+        "ef54c1e1"
       ],
       "topN": 50
     },
@@ -89,50 +86,27 @@
     {
       "name": "base-mainnet",
       "chainId": 8453,
-      "description": "Base Mainnet (OP Stack) — timestamp fork hashes from Canyon through Isthmus. Run -discover after upgrades.",
-      "filterType": "fork_hash_list",
-      "forkHashes": [
-        "cf8548d1",
-        "2c6e51e4",
-        "8408f6db",
-        "6d50a2d6",
-        "6e567dc4",
-        "5de08065",
-        "405435c6",
-        "943d8bab"
-      ],
+      "description": "Base Mainnet (OP Stack) — sourced from Base op-geth bootnodes.go.",
+      "filterType": "bootnodes_go",
+      "sourceUrl": "https://raw.githubusercontent.com/base/op-geth/78436b6ae2a45a9c8449a9b0c93b062a37bd20da/params/bootnodes.go",
+      "sourceKey": "OPMainnetBootnodes",
       "topN": 100
     },
     {
       "name": "base-sepolia",
       "chainId": 84532,
-      "description": "Base Sepolia Testnet (OP Stack) — timestamp fork hashes from Canyon through Isthmus. Run -discover after upgrades.",
-      "filterType": "fork_hash_list",
-      "forkHashes": [
-        "eab69adf",
-        "fcdf6b04",
-        "06a2777e",
-        "c2fa9d6e",
-        "73c6bef8",
-        "eb85361a",
-        "624a89b0",
-        "1b2c996c"
-      ],
+      "description": "Base Sepolia Testnet (OP Stack) — sourced from Base op-geth bootnodes.go.",
+      "filterType": "bootnodes_go",
+      "sourceUrl": "https://raw.githubusercontent.com/base/op-geth/78436b6ae2a45a9c8449a9b0c93b062a37bd20da/params/bootnodes.go",
+      "sourceKey": "OPSepoliaBootnodes",
       "topN": 50
     },
     {
       "name": "gnosis-chain",
       "chainId": 100,
-      "description": "Gnosis Chain (xDai) — fork hashes from genesis through Cancun. Run -discover to verify current dominant hash.",
-      "filterType": "fork_hash_list",
-      "forkHashes": [
-        "f64909b1",
-        "6bac960a",
-        "6fe9f8c9",
-        "fd7cdcc7",
-        "b48bbf10",
-        "0edfb34d"
-      ],
+      "description": "Gnosis Chain (xDai) — sourced from the official Gnosis bootnodes YAML.",
+      "filterType": "bootnodes_yaml",
+      "sourceUrl": "https://raw.githubusercontent.com/gnosischain/configs/refs/heads/main/mainnet/bootnodes.yaml",
       "topN": 100
     }
   ]
