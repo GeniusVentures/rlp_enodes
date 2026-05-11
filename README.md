@@ -27,23 +27,28 @@ output/
   .state          ← SHA-256 of last processed all.json (for change detection)
 ```
 
-Each `{chain}.json` is an array of objects sorted by `score` (descending) then
-`lastResponse` (most recent first), capped at `topN` (default 100):
+Each `{chain}.json` is an object containing chain metadata plus nodes sorted by
+`score` (descending) then `lastResponse` (most recent first), capped at `topN`
+(default 100):
 
 ```json
-[
-  {
-    "enr":          "enr:-...",
-    "enode":        "enode://<128-hex-pubkey>@162.55.86.114:30311",
-    "pubkey":       "<128-hex-secp256k1-pubkey>",
-    "score":        3371,
-    "lastResponse": "2026-03-14T20:54:48Z",
-    "forkId":       "4d518ce1",
-    "forkNext":     0,
-    "ip":           "162.55.86.114",
-    "port":         30311
-  }
-]
+{
+  "networkId": 1,
+  "genesisHex": "d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
+  "nodes": [
+    {
+      "enr":          "enr:-...",
+      "enode":        "enode://<128-hex-pubkey>@162.55.86.114:30311",
+      "pubkey":       "<128-hex-secp256k1-pubkey>",
+      "score":        3371,
+      "lastResponse": "2026-03-14T20:54:48Z",
+      "forkId":       "4d518ce1",
+      "forkNext":     0,
+      "ip":           "162.55.86.114",
+      "port":         30311
+    }
+  ]
+}
 ```
 
 `pubkey`, `enode`, `ip`, and `port` are derived from the decoded ENR itself.

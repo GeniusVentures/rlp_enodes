@@ -6,6 +6,7 @@
     {
       "name": "ethereum-mainnet",
       "chainId": 1,
+      "genesisHex": "d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
       "description": "Ethereum Mainnet",
       "filterType": "geth_network",
       "network": "mainnet",
@@ -14,6 +15,7 @@
     {
       "name": "ethereum-sepolia",
       "chainId": 11155111,
+      "genesisHex": "25a5cc106eea7138acab33231d7160d69cb777ee0c2c553fcddf5138993e6dd9",
       "description": "Ethereum Sepolia Testnet",
       "filterType": "geth_network",
       "network": "sepolia",
@@ -22,6 +24,7 @@
     {
       "name": "ethereum-holesky",
       "chainId": 17000,
+      "genesisHex": "b5f7f912443c940f21fd611f12828d75b534364ed9e95ca4e307729a4661bde4",
       "description": "Ethereum Holesky Testnet",
       "filterType": "geth_network",
       "network": "holesky",
@@ -30,6 +33,7 @@
     {
       "name": "ethereum-hoodi",
       "chainId": 560048,
+      "genesisHex": "bbe312868b376a3001692a646dd2d7d1e4406380dfd86b98aa8a34d1557c971b",
       "description": "Ethereum Hoodi Testnet",
       "filterType": "geth_network",
       "network": "hoodi",
@@ -38,6 +42,7 @@
     {
       "name": "bnb-smart-chain",
       "chainId": 56,
+      "genesisHex": "0d21840abff46b96c84b2ac9e10e4f5cdaeb5693cb665db62a2f3b02d2d57b5b",
       "description": "BNB Smart Chain Mainnet — identified by the 'bsc' ENR field; dominant fork auto-selected",
       "filterType": "enr_field",
       "enrField": "bsc",
@@ -46,6 +51,7 @@
     {
       "name": "bnb-smart-chain-testnet",
       "chainId": 97,
+      "genesisHex": "6d3c66c5357ec91d5c43af47e234a939b22557cbb552dc45bebbceeed90fbe34",
       "description": "BNB Smart Chain Chapel Testnet — compound filter: 'bsc' ENR field AND non-mainnet fork hash. Run -discover to update forkHashes after Chapel upgrades.",
       "filterType": "enr_field",
       "enrField": "bsc",
@@ -57,6 +63,7 @@
     {
       "name": "polygon-mainnet",
       "chainId": 137,
+      "genesisHex": "a9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b",
       "description": "Polygon PoS Mainnet — fork hashes from bor ChainConfig (reflection forks; skip block-0). Run -discover after bor upgrades.",
       "filterType": "fork_hash_list",
       "forkHashes": [
@@ -73,6 +80,7 @@
     {
       "name": "polygon-amoy",
       "chainId": 80002,
+      "genesisHex": "7202b2b53c5a0836e773e319d18922cc756dd67432f9a1f65352b61f4406c697",
       "description": "Polygon Amoy Testnet — fork hashes from bor AmoyChainConfig. Run -discover after bor upgrades.",
       "filterType": "fork_hash_list",
       "forkHashes": [
@@ -86,6 +94,7 @@
     {
       "name": "base-mainnet",
       "chainId": 8453,
+      "genesisHex": "f712aa9241cc24369b143cf6dce85f0902a9731e70d66818a3a5845b296c73dd",
       "description": "Base Mainnet (OP Stack) — sourced from Base op-geth bootnodes.go.",
       "filterType": "bootnodes_go",
       "sourceUrl": "https://raw.githubusercontent.com/base/op-geth/78436b6ae2a45a9c8449a9b0c93b062a37bd20da/params/bootnodes.go",
@@ -95,6 +104,7 @@
     {
       "name": "base-sepolia",
       "chainId": 84532,
+      "genesisHex": "0dcc9e089e30b90ddfc55be9a37dd15bc551aeee999d2e2b51414c54eaf934e4",
       "description": "Base Sepolia Testnet (OP Stack) — sourced from Base op-geth bootnodes.go.",
       "filterType": "bootnodes_go",
       "sourceUrl": "https://raw.githubusercontent.com/base/op-geth/78436b6ae2a45a9c8449a9b0c93b062a37bd20da/params/bootnodes.go",
@@ -104,6 +114,7 @@
     {
       "name": "gnosis-chain",
       "chainId": 100,
+      "genesisHex": "4f1dd23188aab3a76b463e4af801b52b1248ef073c648cbdc4c9333d3da79756",
       "description": "Gnosis Chain (xDai) — sourced from the official Gnosis bootnodes YAML.",
       "filterType": "bootnodes_yaml",
       "sourceUrl": "https://raw.githubusercontent.com/gnosischain/configs/refs/heads/main/mainnet/bootnodes.yaml",

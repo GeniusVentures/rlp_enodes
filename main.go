@@ -75,6 +75,7 @@ type AppConfig struct {
 type ChainConfig struct {
 	Name        string   `json:"name"`
 	ChainID     int      `json:"chainId"`
+	GenesisHex  string   `json:"genesisHex,omitempty"`
 	Description string   `json:"description,omitempty"`
 	FilterType  string   `json:"filterType"`
 	SourceURL   string   `json:"sourceUrl,omitempty"`
@@ -114,6 +115,13 @@ type OutputNode struct {
 	ForkNext     uint64    `json:"forkNext,omitempty"`
 	IP           string    `json:"ip,omitempty"`
 	Port         int       `json:"port,omitempty"`
+}
+
+// ChainOutput is the output structure for a chain's JSON file.
+type ChainOutput struct {
+	NetworkID  int          `json:"networkId"`
+	GenesisHex string       `json:"genesisHex"`
+	Nodes      []OutputNode `json:"nodes"`
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +179,7 @@ func main() {
 		log.Fatalf("mkdir %s: %v", outDir, err)
 	}
 
-	chainEnodes := make(map[string][]OutputNode)
+	chainEnodes := make(map[string]ChainOutput)
 	for _, chain := range cfg.Chains {
 		topN := chain.TopN
 		if topN <= 0 {
@@ -185,7 +193,11 @@ func main() {
 		if nodes == nil {
 			nodes = []OutputNode{}
 		}
-		chainEnodes[chain.Name] = nodes
+		chainEnodes[chain.Name] = ChainOutput{
+			NetworkID:  chain.ChainID,
+			GenesisHex: chain.GenesisHex,
+			Nodes:      nodes,
+		}
 	}
 
 	// Write the combined chain_enodes.json file.
@@ -502,38 +514,18 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 		}
 
 		// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
-		outPath := filepath.Join(outputDir, chain.Name+".json")
-		tmpPath := outPath + ".tmp"
-		data, err := json.MarshalIndent(output, "", "  ")
-		if err != nil {
-			return nil, fmt.Errorf("marshal: %w", err)
+		if err := writeChainOutput(chain, output, outputDir); err != nil {
+			return nil, fmt.Errorf("write chain output: %w", err)
 		}
-		if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-			return nil, fmt.Errorf("write tmp: %w", err)
-		}
-		if err := os.Rename(tmpPath, outPath); err != nil {
-			return nil, fmt.Errorf("rename: %w", err)
-		}
-		log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), outPath)
 		return output, nil
 	}
 
 	output := []OutputNode{}
 
 	// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
-	outPath := filepath.Join(outputDir, chain.Name+".json")
-	tmpPath := outPath + ".tmp"
-	data, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
+	if err := writeChainOutput(chain, output, outputDir); err != nil {
+		return nil, fmt.Errorf("write chain output: %w", err)
 	}
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		return nil, fmt.Errorf("write tmp: %w", err)
-	}
-	if err := os.Rename(tmpPath, outPath); err != nil {
-		return nil, fmt.Errorf("rename: %w", err)
-	}
-	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), outPath)
 	return output, nil
 }
 
@@ -542,7 +534,7 @@ func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int) ([
 	if err != nil {
 		return nil, fmt.Errorf("load bootnodes yaml: %w", err)
 	}
-	return processBootnodeRecords(chain.Name, bootnodes, outputDir, topN)
+	return processBootnodeRecords(chain, bootnodes, outputDir, topN)
 }
 
 func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
@@ -553,10 +545,10 @@ func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int) ([]O
 	for i := range bootnodes {
 		bootnodes[i] = normalizeGoBootnode(bootnodes[i])
 	}
-	return processBootnodeRecords(chain.Name, bootnodes, outputDir, topN)
+	return processBootnodeRecords(chain, bootnodes, outputDir, topN)
 }
 
-func processBootnodeRecords(chainName string, bootnodes []string, outputDir string, topN int) ([]OutputNode, error) {
+func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir string, topN int) ([]OutputNode, error) {
 	output := make([]OutputNode, 0, len(bootnodes))
 	for _, record := range bootnodes {
 		n, err := enode.Parse(enode.ValidSchemes, record)
@@ -591,32 +583,23 @@ func processBootnodeRecords(chainName string, bootnodes []string, outputDir stri
 	}
 
 	if len(output) == 0 {
-		log.Printf("[%s] No matching nodes found", chainName)
+		log.Printf("[%s] No matching nodes found", chain.Name)
 	}
 
 	if len(output) > topN {
 		output = output[:topN]
 	}
 
-	outPath := filepath.Join(outputDir, chainName+".json")
-	tmpPath := outPath + ".tmp"
-	data, err := json.MarshalIndent(output, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("marshal: %w", err)
+	if err := writeChainOutput(chain, output, outputDir); err != nil {
+		return nil, fmt.Errorf("write chain output: %w", err)
 	}
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		return nil, fmt.Errorf("write tmp: %w", err)
-	}
-	if err := os.Rename(tmpPath, outPath); err != nil {
-		return nil, fmt.Errorf("rename: %w", err)
-	}
-	log.Printf("[%s] Wrote %d nodes → %s", chainName, len(output), outPath)
+	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), filepath.Join(outputDir, chain.Name+".json"))
 	return output, nil
 }
 
 // writeChainEnodes writes a combined chain_enodes.json file mapping each chain
-// name to its list of enode records into outputDir.
-func writeChainEnodes(outputDir string, chainEnodes map[string][]OutputNode) error {
+// name to its chain metadata and node records into outputDir.
+func writeChainEnodes(outputDir string, chainEnodes map[string]ChainOutput) error {
 	outPath := filepath.Join(outputDir, "chain_enodes.json")
 	tmpPath := outPath + ".tmp"
 	data, err := json.MarshalIndent(chainEnodes, "", "  ")
@@ -825,4 +808,27 @@ func toOutputNode(c candidateNode) OutputNode {
 		out.Port = port
 	}
 	return out
+}
+
+// writeChainOutput writes a ChainOutput to outputDir/{chainName}.json.
+func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string) error {
+	outPath := filepath.Join(outputDir, chain.Name+".json")
+	tmpPath := outPath + ".tmp"
+	chainOutput := ChainOutput{
+		NetworkID:  chain.ChainID,
+		GenesisHex: chain.GenesisHex,
+		Nodes:      nodes,
+	}
+	data, err := json.MarshalIndent(chainOutput, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal: %w", err)
+	}
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := os.Rename(tmpPath, outPath); err != nil {
+		return fmt.Errorf("rename: %w", err)
+	}
+	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(nodes), outPath)
+	return nil
 }
