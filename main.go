@@ -111,7 +111,7 @@ type OutputNode struct {
 	Pubkey       string    `json:"pubkey"`
 	Score        int       `json:"score"`
 	LastResponse time.Time `json:"lastResponse,omitempty"`
-	ForkID       string    `json:"forkId,omitempty"`
+	ForkID       string    `json:"-"`
 	ForkNext     uint64    `json:"forkNext,omitempty"`
 	IP           string    `json:"ip,omitempty"`
 	Port         int       `json:"port,omitempty"`
@@ -121,6 +121,7 @@ type OutputNode struct {
 type ChainOutput struct {
 	NetworkID  int          `json:"networkId"`
 	GenesisHex string       `json:"genesisHex"`
+	ForkID     string       `json:"forkId,omitempty"`
 	Nodes      []OutputNode `json:"nodes"`
 }
 
@@ -196,6 +197,7 @@ func main() {
 		chainEnodes[chain.Name] = ChainOutput{
 			NetworkID:  chain.ChainID,
 			GenesisHex: chain.GenesisHex,
+			ForkID:     chainForkID(nodes),
 			Nodes:      nodes,
 		}
 	}
@@ -556,10 +558,7 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 			continue
 		}
 
-		out := OutputNode{}
-		if strings.HasPrefix(record, "enr:") {
-			out.ENR = record
-		}
+		out := OutputNode{ENR: record}
 		if enodeURL := n.URLv4(); enodeURL != "" {
 			out.Enode = enodeURL
 		}
@@ -810,6 +809,15 @@ func toOutputNode(c candidateNode) OutputNode {
 	return out
 }
 
+func chainForkID(nodes []OutputNode) string {
+	for _, node := range nodes {
+		if node.ForkID != "" {
+			return node.ForkID
+		}
+	}
+	return ""
+}
+
 // writeChainOutput writes a ChainOutput to outputDir/{chainName}.json.
 func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string) error {
 	outPath := filepath.Join(outputDir, chain.Name+".json")
@@ -817,6 +825,7 @@ func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string) e
 	chainOutput := ChainOutput{
 		NetworkID:  chain.ChainID,
 		GenesisHex: chain.GenesisHex,
+		ForkID:     chainForkID(nodes),
 		Nodes:      nodes,
 	}
 	data, err := json.MarshalIndent(chainOutput, "", "  ")
