@@ -144,3 +144,28 @@ both advertise the `bsc` ENR key but at different fork hashes.
 - [`github.com/ethereum/go-ethereum`](https://github.com/ethereum/go-ethereum) —
   for ENR decoding (`p2p/enode`, `p2p/enr`), fork ID filtering (`core/forkid`),
   and chain configurations (`params`).
+
+## Signing & Authenticity
+
+The `chain_enodes.json` file can be cryptographically signed to prove you generated it.
+Use ECDSA (secp256k1, Ethereum-compatible) signing with a private key.
+
+**Quick Start:**
+
+1. Generate a signing key:
+   ```bash
+   ./generate_signing_key.sh
+   ```
+
+2. Export the key and run:
+   ```bash
+   export SIGNING_KEY='<base64-encoded-key>'
+   ./filter_nodes
+   ```
+
+3. The `output/chain_enodes.json` will now include:
+   - `signature`: ECDSA signature over the entire JSON document
+   - `signerAddress`: Ethereum address of the signer
+
+For full setup and verification instructions, see [**SIGNING.md**](SIGNING.md).
+

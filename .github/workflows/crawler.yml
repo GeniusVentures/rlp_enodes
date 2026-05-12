@@ -1,0 +1,48 @@
+name: Crawl Base Bootstrap Nodes
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  crawl:
+    name: Crawl Base networks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build filter tool
+        run: go build -o filter_nodes .
+
+      - name: Crawl Base mainnet
+        run: ./filter_nodes -base-all -base-network mainnet
+
+      - name: Crawl Base sepolia
+        run: ./filter_nodes -base-all -base-network sepolia
+
+      - name: Check for changes and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Check if the specific files have changes
+          if git diff --quiet output/base-mainnet.json output/base-sepolia.json; then
+            echo "No changes to base-mainnet.json or base-sepolia.json"
+          else
+            echo "Changes detected, committing and pushing"
+            git add output/base-mainnet.json output/base-sepolia.json
+            git commit -m "chore: update Base bootstrap nodes [skip ci]"
+            git push
+          fi

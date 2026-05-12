@@ -1,160 +1,46 @@
-// filter_nodes downloads the latest all.json from the Ethereum discv4-dns-lists
-// repository, decodes each node's ENR record, identifies which EVM-compatible
-// chain the node belongs to, determines the dominant (current) fork ID per chain,
-// then writes ranked JSON files of the top bootstrap peers for each configured
-// chain directly into the output directory as {chain-name}.json.
-//
-// Supported filter strategies (filterType):
-//
-//   - geth_network    uses go-ethereum forkid.NewStaticFilter so it accepts every
-//     node on the same chain regardless of current fork level.
-//     Supported networks: mainnet, sepolia, holesky, hoodi.
-//
-//   - enr_field       accepts nodes that advertise a specific ENR key (e.g. "bsc"
-//     for BNB Smart Chain nodes).  When forkHashes is ALSO set,
-//     both conditions must match (compound AND filter).
-//
-//   - fork_hash_list  accepts nodes whose current eth fork hash appears in the
-//     configured forkHashes list.  When enrField is ALSO set,
-//     both conditions must match (compound AND filter).
-//     Run with -discover to print a ranked list of all observed fork
-//     hashes and identify which hash belongs to which chain.
 package main
 
 import (
-	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
-	"fmt"
-	"hash/crc32"
-	"io"
 	"log"
-	"math"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/enr"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 )
-
-// ---------------------------------------------------------------------------
-// Configuration types
-// ---------------------------------------------------------------------------
-
-// AppConfig is the root of chains_config.json.
-type AppConfig struct {
-	AllJSONURL  string        `json:"allJsonURL"`
-	OutputDir   string        `json:"outputDir"`
-	DefaultTopN int           `json:"defaultTopN"`
-	Chains      []ChainConfig `json:"chains"`
-}
-
-// ChainConfig describes one chain to filter for.
-//
-// filterType values:
-//   - "geth_network"   – go-ethereum forkid filter; requires "network".
-//   - "enr_field"      – presence of a specific ENR key; requires "enrField".
-//   - "fork_hash_list" – eth fork hash exact match; requires "forkHashes".
-//   - "bootnodes_yaml" – external YAML list of ENR bootnodes; requires "sourceUrl".
-//   - "bootnodes_go"   – external Go file containing a named []string bootnode list;
-//     requires "sourceUrl" and "sourceKey".
-//
-// Compound AND: set both enrField AND forkHashes together with either
-// "enr_field" or "fork_hash_list" as filterType to require both conditions.
-type ChainConfig struct {
-	Name          string   `json:"name"`
-	ChainID       int      `json:"chainId"`
-	GenesisHex    string   `json:"genesisHex,omitempty"`
-	Description   string   `json:"description,omitempty"`
-	FilterType    string   `json:"filterType"`
-	SourceURL     string   `json:"sourceUrl,omitempty"`
-	SourceKey     string   `json:"sourceKey,omitempty"`
-	Network       string   `json:"network,omitempty"`    // geth_network
-	EnrField      string   `json:"enrField,omitempty"`   // enr_field (or compound)
-	ForkHashes    []string `json:"forkHashes,omitempty"` // fork_hash_list (or compound)
-	TopN          int      `json:"topN,omitempty"`
-	ForkConfigURL string   `json:"forkConfigUrl,omitempty"`
-	ForkConfigPath string   `json:"forkConfigPath,omitempty"`
-}
-
-// ---------------------------------------------------------------------------
-// all.json types
-// ---------------------------------------------------------------------------
-
-// NodeRecord mirrors one entry in all.json.
-type NodeRecord struct {
-	Seq           uint64    `json:"seq"`
-	Record        string    `json:"record"`
-	Score         int       `json:"score"`
-	FirstResponse time.Time `json:"firstResponse,omitempty"`
-	LastResponse  time.Time `json:"lastResponse,omitempty"`
-	LastCheck     time.Time `json:"lastCheck,omitempty"`
-}
-
-// ---------------------------------------------------------------------------
-// Output types
-// ---------------------------------------------------------------------------
-
-// OutputNode is one entry in an output {chain}.json file.
-type OutputNode struct {
-	ENR          string    `json:"enr"`
-	Enode        string    `json:"enode,omitempty"`
-	Pubkey       string    `json:"pubkey"`
-	Score        int       `json:"score"`
-	LastResponse time.Time `json:"lastResponse,omitempty"`
-	ForkID       string    `json:"-"`
-	ForkNext     string    `json:"forkNext,omitempty"`
-	IP           string    `json:"ip,omitempty"`
-	Port         int       `json:"port,omitempty"`
-}
-
-// ChainOutput is the output structure for a chain's JSON file.
-type ChainOutput struct {
-	NetworkID  int          `json:"networkId"`
-	GenesisHex string       `json:"genesisHex"`
-	ForkID     string       `json:"forkId"`
-	ForkNext   string       `json:"forkNext"`
-	Nodes      []OutputNode `json:"nodes"`
-}
-
-// ---------------------------------------------------------------------------
-// Internal working types
-// ---------------------------------------------------------------------------
-
-type candidateNode struct {
-	nodeID   string
-	record   NodeRecord
-	node     *enode.Node
-	forkHash string // hex-encoded 4-byte fork hash, or "" if no eth entry
-	forkNext string
-}
-
-// ---------------------------------------------------------------------------
-// main
-// ---------------------------------------------------------------------------
 
 func main() {
 	configPath := flag.String("config", "chains_config.json", "path to chains_config.json")
 	inputFile := flag.String("input", "", "local all.json file to use instead of downloading")
 	discover := flag.Bool("discover", false, "print fork-hash discovery summary and exit")
+	baseAll := flag.Bool("base-all", false, "crawl Base bootnodes and write output/base-all.json")
+	baseNetwork := flag.String("base-network", "mainnet", "Base network for -base-all: mainnet or sepolia")
 	flag.Parse()
 
 	cfg, err := loadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
+	}
+
+	outDir := cfg.OutputDir
+	if outDir == "" {
+		outDir = "output"
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		log.Fatalf("mkdir %s: %v", outDir, err)
+	}
+
+	if *baseAll {
+		if err := writeBaseAllFile(*baseNetwork, outDir); err != nil {
+			log.Fatalf("write base-all.json: %v", err)
+		}
+		chainEnodes, err := loadChainOutputsFromDisk(cfg, outDir)
+		if err != nil {
+			log.Fatalf("load chain outputs: %v", err)
+		}
+		if err := writeChainEnodes(outDir, chainEnodes); err != nil {
+			log.Fatalf("write chain_enodes.json: %v", err)
+		}
+		return
 	}
 
 	raw, err := loadAllJSON(*inputFile, cfg.AllJSONURL)
@@ -177,16 +63,23 @@ func main() {
 	if defaultTopN <= 0 {
 		defaultTopN = 100
 	}
-	outDir := cfg.OutputDir
-	if outDir == "" {
-		outDir = "output"
-	}
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		log.Fatalf("mkdir %s: %v", outDir, err)
-	}
 
 	chainEnodes := make(map[string]ChainOutput)
 	for _, chain := range cfg.Chains {
+		if chain.Name == "base-mainnet" || chain.Name == "base-sepolia" {
+			output, err := loadChainOutputFromDisk(outDir, chain.Name)
+			if err != nil {
+				if os.IsNotExist(err) {
+					log.Printf("[%s] output file not found on disk; skipping for this run", chain.Name)
+					continue
+				}
+				log.Printf("ERROR loading chain %s from disk: %v", chain.Name, err)
+				continue
+			}
+			chainEnodes[chain.Name] = output
+			log.Printf("[%s] Loaded %d nodes from existing output file", chain.Name, len(output.Nodes))
+			continue
+		}
 		topN := chain.TopN
 		if topN <= 0 {
 			topN = defaultTopN
@@ -199,843 +92,68 @@ func main() {
 		if nodes == nil {
 			nodes = []OutputNode{}
 		}
-		forkID := dominantFork
-		if forkID == "" {
-			forkID = chainForkID(nodes)
+		fork := dominantFork
+		if fork.forkID == "" {
+			fork = chainForkTuple(nodes)
 		}
-		forkNext := chainForkNext(nodes)
-		if forkID == "" && chain.ForkConfigURL != "" {
+		if (fork.forkID == "" || fork.forkNext == "") && chain.ForkConfigPath != "" {
 			configForkID, configForkNext, err := loadForkConfig(chain)
 			if err != nil {
 				log.Printf("ERROR loading fork config for chain %s: %v", chain.Name, err)
 			} else {
-				forkID = configForkID
-				forkNext = configForkNext
+				fork = forkTuple{forkID: configForkID, forkNext: configForkNext}
 			}
-		} else if forkID == "" && chain.ForkConfigURL != "" {
+		} else if (fork.forkID == "" || fork.forkNext == "") && chain.ForkConfigURL != "" {
 			configForkID, configForkNext, err := loadRemoteForkConfig(chain.ForkConfigURL)
 			if err != nil {
 				log.Printf("ERROR loading remote fork config for chain %s: %v", chain.Name, err)
 			} else {
-				forkID = configForkID
-				forkNext = configForkNext
+				fork = forkTuple{forkID: configForkID, forkNext: configForkNext}
 			}
-		}
-		if ( forkID == "" || forkNext == "" ) && len(nodes) > 0 {
-			forkID = chainForkID(nodes)
-			forkNext = chainForkNext(nodes)
 		}
 		chainEnodes[chain.Name] = ChainOutput{
 			NetworkID:  chain.ChainID,
 			GenesisHex: chain.GenesisHex,
-			ForkID:     forkID,
-			ForkNext:   forkNext,
+			ForkID:     fork.forkID,
+			ForkNext:   fork.forkNext,
 			Nodes:      nodes,
 		}
 	}
 
-	// Write the combined chain_enodes.json file.
 	if err := writeChainEnodes(outDir, chainEnodes); err != nil {
 		log.Fatalf("write chain_enodes.json: %v", err)
 	}
 }
 
-// shortSHA returns the first 16 hex characters of the SHA-256 of b,
-// suitable for log messages.
-func shortSHA(b []byte) string {
-	h := sha256.Sum256(b)
-	return hex.EncodeToString(h[:])[:16]
-}
-
-// ---------------------------------------------------------------------------
-// Config & download helpers
-// ---------------------------------------------------------------------------
-
-func loadConfig(path string) (*AppConfig, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var cfg AppConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
-	}
-	return &cfg, nil
-}
-
-func loadAllJSON(localFile, url string) ([]byte, error) {
-	if localFile != "" {
-		log.Printf("Reading all.json from local file: %s", localFile)
-		return os.ReadFile(localFile)
-	}
-	log.Printf("Downloading all.json from %s", url)
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("http get: %w", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Printf("WARNING closing response body for %s: %v", url, closeErr)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("http status %d", resp.StatusCode)
-	}
-	return io.ReadAll(resp.Body)
-}
-
-func loadTextURL(url string) ([]byte, error) {
-	log.Printf("Downloading external source from %s", url)
-	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("http get: %w", err)
-	}
-	defer func() {
-		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Printf("WARNING closing response body for %s: %v", url, closeErr)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("http status %d", resp.StatusCode)
-	}
-	return io.ReadAll(resp.Body)
-}
-
-func loadBootnodesYAML(url string) ([]string, error) {
-	if url == "" {
-		return nil, fmt.Errorf("missing sourceUrl")
-	}
-
-	raw, err := loadTextURL(url)
-	if err != nil {
-		return nil, err
-	}
-
-	var bootnodes []string
-	scanner := bufio.NewScanner(strings.NewReader(string(raw)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "- ") {
-			continue
-		}
-
-		value := strings.TrimSpace(strings.TrimPrefix(line, "- "))
-		value = strings.Trim(value, `"'`)
-		if value == "" {
-			continue
-		}
-		bootnodes = append(bootnodes, value)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return bootnodes, nil
-}
-
-func loadBootnodesGo(url string, sourceKey string) ([]string, error) {
-	if url == "" {
-		return nil, fmt.Errorf("missing sourceUrl")
-	}
-	if sourceKey == "" {
-		return nil, fmt.Errorf("missing sourceKey")
-	}
-
-	raw, err := loadTextURL(url)
-	if err != nil {
-		return nil, err
-	}
-
-	var (
-		bootnodes []string
-		inBlock   bool
-	)
-	startMarker := fmt.Sprintf("var %s = []string{", sourceKey)
-	scanner := bufio.NewScanner(strings.NewReader(string(raw)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if !inBlock {
-			if strings.HasPrefix(line, startMarker) {
-				inBlock = true
+func loadChainOutputsFromDisk(cfg *AppConfig, outDir string) (map[string]ChainOutput, error) {
+	chainEnodes := make(map[string]ChainOutput)
+	for _, chain := range cfg.Chains {
+		path := filepath.Join(outDir, chain.Name+".json")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
 			}
-			continue
-		}
-
-		if strings.HasPrefix(line, "}") {
-			break
-		}
-
-		start := strings.IndexByte(line, '"')
-		if start == -1 {
-			continue
-		}
-		end := strings.LastIndexByte(line, '"')
-		if end <= start {
-			continue
-		}
-		value, err := strconv.Unquote(line[start : end+1])
-		if err != nil || value == "" {
-			continue
-		}
-		bootnodes = append(bootnodes, value)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	if !inBlock {
-		return nil, fmt.Errorf("sourceKey %q not found", sourceKey)
-	}
-
-	return bootnodes, nil
-}
-
-func normalizeGoBootnode(record string) string {
-	if !strings.HasPrefix(record, "enode://") {
-		return record
-	}
-
-	parsed, err := url.Parse(record)
-	if err != nil {
-		return record
-	}
-	if parsed.Host == "" || strings.Contains(parsed.Host, ":") {
-		return record
-	}
-
-	discport := parsed.Query().Get("discport")
-	if discport == "" {
-		return record
-	}
-
-	return fmt.Sprintf("enode://%s@%s:%s", parsed.User.Username(), parsed.Host, discport)
-}
-
-// ---------------------------------------------------------------------------
-// Discovery mode
-// ---------------------------------------------------------------------------
-
-// printDiscovery prints a ranked summary of all fork hashes seen in the dataset
-// along with any chain-specific ENR fields.  Use this to identify which fork
-// hash belongs to which chain when configuring fork_hash_list entries.
-func printDiscovery(allNodes map[string]NodeRecord) {
-	type fhStats struct {
-		count      int
-		totalScore int
-		extraKeys  map[string]int // chain-specific ENR keys seen alongside this hash
-	}
-	stats := make(map[string]*fhStats)
-	for _, record := range allNodes {
-		n, err := enode.Parse(enode.ValidSchemes, record.Record)
-		if err != nil {
-			continue
-		}
-		fh, _ := extractForkID(n)
-		if fh == "" {
-			continue
-		}
-		s := stats[fh]
-		if s == nil {
-			s = &fhStats{extraKeys: make(map[string]int)}
-			stats[fh] = s
-		}
-		s.count++
-		s.totalScore += record.Score
-		// Record chain-specific ENR keys
-		for _, key := range []string{"bsc", "opera", "wit", "diff", "beacon", "snap", "les"} {
-			var dummy struct {
-				Tail []rlp.RawValue `rlp:"tail"`
-			}
-			if n.Load(enr.WithEntry(key, &dummy)) == nil {
-				s.extraKeys[key]++
-			}
-		}
-	}
-
-	// Sort by totalScore descending (same metric used for dominant fork selection).
-	type row struct {
-		hash  string
-		stats *fhStats
-	}
-	rows := make([]row, 0, len(stats))
-	for h, s := range stats {
-		rows = append(rows, row{h, s})
-	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].stats.totalScore != rows[j].stats.totalScore {
-			return rows[i].stats.totalScore > rows[j].stats.totalScore
-		}
-		return rows[i].stats.count > rows[j].stats.count
-	})
-
-	fmt.Println("Fork hash discovery summary (sorted by total score; use to identify chain fork hashes):")
-	fmt.Printf("%-12s %7s %12s  %s\n", "FORK_HASH", "NODES", "TOTAL_SCORE", "EXTRA_ENR_KEYS")
-	for _, r := range rows {
-		keys := ""
-		for k, n := range r.stats.extraKeys {
-			keys += fmt.Sprintf("%s(%d) ", k, n)
-		}
-		fmt.Printf("%-12s %7d %12d  %s\n", r.hash, r.stats.count, r.stats.totalScore, keys)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Core pipeline
-// ---------------------------------------------------------------------------
-
-func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int) ([]OutputNode, string, error) {
-	if chain.FilterType == "bootnodes_yaml" {
-		nodes, err := processBootnodesYAMLChain(chain, outputDir, topN)
-		return nodes, "", err
-	}
-	if chain.FilterType == "bootnodes_go" {
-		nodes, err := processBootnodesGOChain(chain, outputDir, topN)
-		return nodes, "", err
-	}
-
-	filter, err := buildFilter(chain)
-	if err != nil {
-		return nil, "", fmt.Errorf("build filter: %w", err)
-	}
-
-	// Step 1: collect matching candidates.
-	var candidates []candidateNode
-	for nodeID, record := range allNodes {
-		n, err := enode.Parse(enode.ValidSchemes, record.Record)
-		if err != nil {
-			continue
-		}
-		if !filter(n) {
-			continue
-		}
-		fh, fn := extractForkID(n)
-		candidates = append(candidates, candidateNode{
-			nodeID:   nodeID,
-			record:   record,
-			node:     n,
-			forkHash: fh,
-			forkNext: fn,
-		})
-	}
-
-	var dominant string
-	if len(candidates) == 0 {
-		log.Printf("[%s] No matching nodes found", chain.Name)
-	} else {
-		log.Printf("[%s] Matched %d nodes (all fork versions)", chain.Name, len(candidates))
-
-		// Step 2: find the dominant fork hash (highest aggregate score).
-		dominant = dominantForkHash(candidates)
-		log.Printf("[%s] Dominant fork hash: %s", chain.Name, dominant)
-
-		// Step 3: filter to dominant fork hash only.
-		var filtered []candidateNode
-		for _, c := range candidates {
-			if c.forkHash == dominant {
-				filtered = append(filtered, c)
-			}
-		}
-		log.Printf("[%s] Nodes on dominant fork: %d", chain.Name, len(filtered))
-
-		// Step 4: rank by score desc, then lastResponse desc.
-		sort.Slice(filtered, func(i, j int) bool {
-			si, sj := filtered[i].record.Score, filtered[j].record.Score
-			if si != sj {
-				return si > sj
-			}
-			return filtered[i].record.LastResponse.After(filtered[j].record.LastResponse)
-		})
-
-		// Step 5: cap at topN.
-		if len(filtered) > topN {
-			filtered = filtered[:topN]
-		}
-
-		// Step 6: marshal to OutputNode slice.
-		output := make([]OutputNode, 0, len(filtered))
-		for _, c := range filtered {
-			output = append(output, toOutputNode(c))
-		}
-
-		// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
-		if err := writeChainOutput(chain, output, outputDir, dominant, chainForkNext(output)); err != nil {
-			return nil, "", fmt.Errorf("write chain output: %w", err)
-		}
-		return output, dominant, nil
-	}
-
-	output := []OutputNode{}
-
-	// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
-	if err := writeChainOutput(chain, output, outputDir, dominant, chainForkNext(output)); err != nil {
-		return nil, "", fmt.Errorf("write chain output: %w", err)
-	}
-	return output, dominant, nil
-}
-
-func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
-	bootnodes, err := loadBootnodesYAML(chain.SourceURL)
-	if err != nil {
-		return nil, fmt.Errorf("load bootnodes yaml: %w", err)
-	}
-	return processBootnodeRecords(chain, bootnodes, outputDir, topN)
-}
-
-func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
-	bootnodes, err := loadBootnodesGo(chain.SourceURL, chain.SourceKey)
-	if err != nil {
-		return nil, fmt.Errorf("load bootnodes go: %w", err)
-	}
-	for i := range bootnodes {
-		bootnodes[i] = normalizeGoBootnode(bootnodes[i])
-	}
-	return processBootnodeRecords(chain, bootnodes, outputDir, topN)
-}
-
-func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir string, topN int) ([]OutputNode, error) {
-	output := make([]OutputNode, 0, len(bootnodes))
-	for _, record := range bootnodes {
-		n, err := enode.Parse(enode.ValidSchemes, record)
-		if err != nil {
-			continue
-		}
-
-		out := OutputNode{ENR: record}
-		if enodeURL := n.URLv4(); enodeURL != "" {
-			out.Enode = enodeURL
-		}
-		if pubkey := n.Pubkey(); pubkey != nil {
-			out.Pubkey = fmt.Sprintf("%x", crypto.FromECDSAPub(pubkey)[1:])
-		}
-		if forkHash, forkNext := extractForkID(n); forkHash != "" {
-			out.ForkID = forkHash
-			out.ForkNext = forkNext
-		}
-		if ip := n.IP(); ip != nil {
-			out.IP = ip.String()
-		}
-		if port := n.TCP(); port > 0 {
-			out.Port = port
-		} else if port := n.UDP(); port > 0 {
-			out.Port = port
-		}
-
-		output = append(output, out)
-	}
-
-	if len(output) == 0 {
-		log.Printf("[%s] No matching nodes found", chain.Name)
-	}
-
-	if len(output) > topN {
-		output = output[:topN]
-	}
-
-	forkID := chainForkID(output)
-	forkNext := chainForkNext(output)
-	if ( forkID == "" || forkNext == "" ) && chain.ForkConfigPath != "" {
-		configForkID, configForkNext, err := loadForkConfig(chain)
-		if err != nil {
-			return nil, fmt.Errorf("load fork config: %w", err)
-		}
-		if forkID == "" {
-			forkID = configForkID
-		}
-		if forkNext == "" {
-			forkNext = configForkNext
-		}
-	} else if ( forkID == "" || forkNext == "" ) && chain.ForkConfigURL != "" {
-		configForkID, configForkNext, err := loadRemoteForkConfig(chain.ForkConfigURL)
-		if err != nil {
-			return nil, fmt.Errorf("load remote fork config: %w", err)
-		}
-		if forkID == "" {
-			forkID = configForkID
-		}
-		if forkNext == "" {
-			forkNext = configForkNext
-		}
-	}
-
-	if err := writeChainOutput(chain, output, outputDir, forkID, forkNext); err != nil {
-		return nil, fmt.Errorf("write chain output: %w", err)
-	}
-	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), filepath.Join(outputDir, chain.Name+".json"))
-	return output, nil
-}
-
-// writeChainEnodes writes a combined chain_enodes.json file mapping each chain
-// name to its chain metadata and node records into outputDir.
-func writeChainEnodes(outputDir string, chainEnodes map[string]ChainOutput) error {
-	outPath := filepath.Join(outputDir, "chain_enodes.json")
-	tmpPath := outPath + ".tmp"
-	data, err := json.MarshalIndent(chainEnodes, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
-	}
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		return fmt.Errorf("write tmp: %w", err)
-	}
-	if err := os.Rename(tmpPath, outPath); err != nil {
-		return fmt.Errorf("rename: %w", err)
-	}
-	log.Printf("Wrote combined chain_enodes.json → %s", outPath)
-	return nil
-}
-
-// ---------------------------------------------------------------------------
-// Filter construction
-// ---------------------------------------------------------------------------
-
-// nodeFilter returns true if the node belongs to the target chain.
-type nodeFilter func(*enode.Node) bool
-
-// buildFilter constructs a node filter from a ChainConfig.
-//
-// Compound AND behaviour: if both enrField and forkHashes are present, the
-// returned filter requires BOTH conditions to match simultaneously.  This
-// lets you narrow a chain-specific ENR field (e.g. "bsc") to a specific
-// fork version (e.g. testnet vs mainnet).
-func buildFilter(chain ChainConfig) (nodeFilter, error) {
-	var filters []nodeFilter
-
-	switch chain.FilterType {
-	case "geth_network":
-		f, err := buildGethFilter(chain.Network)
-		if err != nil {
 			return nil, err
 		}
-		filters = append(filters, f)
-	case "enr_field":
-		if chain.EnrField == "" {
-			return nil, fmt.Errorf("enr_field filter requires enrField")
+		var output ChainOutput
+		if err := json.Unmarshal(data, &output); err != nil {
+			return nil, err
 		}
-		filters = append(filters, buildEnrFieldFilter(chain.EnrField))
-	case "fork_hash_list":
-		if len(chain.ForkHashes) == 0 {
-			return nil, fmt.Errorf("fork_hash_list filter requires forkHashes; run -discover to find them")
-		}
-		filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
-	case "bootnodes_yaml":
-		return nil, fmt.Errorf("bootnodes_yaml is handled before filter construction")
-	case "bootnodes_go":
-		return nil, fmt.Errorf("bootnodes_go is handled before filter construction")
-	default:
-		return nil, fmt.Errorf("unknown filterType %q", chain.FilterType)
+		chainEnodes[chain.Name] = output
 	}
-
-	// Compound AND: add secondary conditions when both fields are present.
-	if chain.FilterType != "enr_field" && chain.EnrField != "" {
-		filters = append(filters, buildEnrFieldFilter(chain.EnrField))
-	}
-	if chain.FilterType != "fork_hash_list" && len(chain.ForkHashes) > 0 {
-		filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
-	}
-
-	if len(filters) == 1 {
-		return filters[0], nil
-	}
-	return func(n *enode.Node) bool {
-		for _, f := range filters {
-			if !f(n) {
-				return false
-			}
-		}
-		return true
-	}, nil
+	return chainEnodes, nil
 }
 
-// buildGethFilter uses go-ethereum's forkid.NewStaticFilter evaluated at genesis
-// time to accept any node that is on the same chain (same genesis hash) regardless
-// of which fork level they are currently at.
-func buildGethFilter(network string) (nodeFilter, error) {
-	var filter forkid.Filter
-	switch network {
-	case "mainnet":
-		filter = forkid.NewStaticFilter(params.MainnetChainConfig, core.DefaultGenesisBlock().ToBlock())
-	case "sepolia":
-		filter = forkid.NewStaticFilter(params.SepoliaChainConfig, core.DefaultSepoliaGenesisBlock().ToBlock())
-	case "holesky":
-		filter = forkid.NewStaticFilter(params.HoleskyChainConfig, core.DefaultHoleskyGenesisBlock().ToBlock())
-	case "hoodi":
-		filter = forkid.NewStaticFilter(params.HoodiChainConfig, core.DefaultHoodiGenesisBlock().ToBlock())
-	default:
-		return nil, fmt.Errorf("unknown geth network %q", network)
-	}
-	return func(n *enode.Node) bool {
-		var eth struct {
-			ForkID forkid.ID
-			Tail   []rlp.RawValue `rlp:"tail"`
-		}
-		if n.Load(enr.WithEntry("eth", &eth)) != nil {
-			return false
-		}
-		return filter(eth.ForkID) == nil
-	}, nil
-}
-
-// buildEnrFieldFilter accepts nodes that advertise a specific ENR key.
-func buildEnrFieldFilter(field string) nodeFilter {
-	return func(n *enode.Node) bool {
-		var val struct {
-			Tail []rlp.RawValue `rlp:"tail"`
-		}
-		return n.Load(enr.WithEntry(field, &val)) == nil
-	}
-}
-
-// buildForkHashListFilter accepts nodes whose eth fork hash is in the provided list.
-func buildForkHashListFilter(hashes []string) nodeFilter {
-	allowed := make(map[string]bool, len(hashes))
-	for _, h := range hashes {
-		allowed[h] = true
-	}
-	return func(n *enode.Node) bool {
-		fh, _ := extractForkID(n)
-		return fh != "" && allowed[fh]
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Fork ID helpers
-// ---------------------------------------------------------------------------
-
-func extractForkID(n *enode.Node) (hashHex string, next string) {
-	var eth struct {
-		ForkID forkid.ID
-		Tail   []rlp.RawValue `rlp:"tail"`
-	}
-	if n.Load(enr.WithEntry("eth", &eth)) != nil {
-		return "", ""
-	}
-	return fmt.Sprintf("%x", eth.ForkID.Hash), fmt.Sprintf("%x", eth.ForkID.Next)
-}
-
-// dominantForkHash returns the fork hash (hex) with the highest aggregate node
-// score across candidates.  Score-weighted selection ensures that high-quality
-// nodes drive the selection rather than stale low-score nodes.
-func dominantForkHash(candidates []candidateNode) string {
-	type stats struct {
-		count      int
-		totalScore int
-	}
-	tally := make(map[string]*stats)
-	for _, c := range candidates {
-		if c.forkHash == "" {
-			continue
-		}
-		s := tally[c.forkHash]
-		if s == nil {
-			s = &stats{}
-			tally[c.forkHash] = s
-		}
-		s.count++
-		s.totalScore += c.record.Score
-	}
-	// Primary: highest totalScore (favours the group of actively-responding,
-	// high-quality nodes on the current fork).  Secondary tie-break: count.
-	best := ""
-	bestScore := -1
-	bestCount := 0
-	for fh, s := range tally {
-		if s.totalScore > bestScore || (s.totalScore == bestScore && s.count > bestCount) {
-			best = fh
-			bestScore = s.totalScore
-			bestCount = s.count
-		}
-	}
-	return best
-}
-
-// ---------------------------------------------------------------------------
-// Output helpers
-// ---------------------------------------------------------------------------
-
-func toOutputNode(c candidateNode) OutputNode {
-	out := OutputNode{
-		ENR:          c.record.Record,
-		Pubkey:       c.nodeID,
-		Score:        c.record.Score,
-		LastResponse: c.record.LastResponse,
-		ForkID:       c.forkHash,
-		ForkNext:     c.forkNext,
-	}
-	if enodeURL := c.node.URLv4(); enodeURL != "" {
-		out.Enode = enodeURL
-	}
-	if pubkey := c.node.Pubkey(); pubkey != nil {
-		out.Pubkey = fmt.Sprintf("%x", crypto.FromECDSAPub(pubkey)[1:])
-	}
-	if ip := c.node.IP(); ip != nil {
-		out.IP = ip.String()
-	}
-	if port := c.node.TCP(); port > 0 {
-		out.Port = port
-	} else if port := c.node.UDP(); port > 0 {
-		out.Port = port
-	}
-	return out
-}
-
-func chainForkID(nodes []OutputNode) string {
-	for _, node := range nodes {
-		if node.ForkID != "" {
-			return node.ForkID
-		}
-	}
-	return ""
-}
-
-func chainForkNext(nodes []OutputNode) string {
-	for _, node := range nodes {
-		if node.ForkNext != "" {
-			return node.ForkNext
-		}
-	}
-	return ""
-}
-
-// writeChainOutput writes a ChainOutput to outputDir/{chainName}.json.
-func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string, forkID string, forkNext string) error {
-	outPath := filepath.Join(outputDir, chain.Name+".json")
-	tmpPath := outPath + ".tmp"
-	chainOutput := ChainOutput{
-		NetworkID:  chain.ChainID,
-		GenesisHex: chain.GenesisHex,
-		ForkID:     forkID,
-		ForkNext:   forkNext,
-		Nodes:      nodes,
-	}
-	data, err := json.MarshalIndent(chainOutput, "", "  ")
+func loadChainOutputFromDisk(outDir string, chainName string) (ChainOutput, error) {
+	path := filepath.Join(outDir, chainName+".json")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("marshal: %w", err)
+		return ChainOutput{}, err
 	}
-	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
-		return fmt.Errorf("write tmp: %w", err)
+	var output ChainOutput
+	if err := json.Unmarshal(data, &output); err != nil {
+		return ChainOutput{}, err
 	}
-	if err := os.Rename(tmpPath, outPath); err != nil {
-		return fmt.Errorf("rename: %w", err)
-	}
-	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(nodes), outPath)
-	return nil
-}
-
-func loadForkConfig(chain ChainConfig) (string, string, error) {
-	if chain.ForkConfigPath == "" {
-		return "", "", fmt.Errorf("missing fork config path")
-	}
-
-	data, err := os.ReadFile(chain.ForkConfigPath)
-	if err != nil {
-		return "", "", err
-	}
-
-	var cfg LocalForkConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return "", "", err
-	}
-	if cfg.ForkID != "" || cfg.ForkNext != "" {
-		return strings.TrimPrefix(cfg.ForkID, "0x"), strings.TrimPrefix(cfg.ForkNext, "0x"), nil
-	}
-	return computeTimeBasedForkID(cfg)
-}
-
-func loadRemoteForkConfig(url string) (string, string, error) {
-	if url == "" {
-		return "", "", fmt.Errorf("missing fork config url")
-	}
-
-	raw, err := loadTextURL(url)
-	if err != nil {
-		return "", "", err
-	}
-
-	var (
-		currentForkVersion string
-		nextForkVersion    string
-	)
-	scanner := bufio.NewScanner(strings.NewReader(string(raw)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "#") || line == "" {
-			continue
-		}
-		if strings.HasPrefix(line, "FULU_FORK_VERSION:") {
-			nextForkVersion = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "FULU_FORK_VERSION:")), "'")
-			continue
-		}
-		if strings.HasPrefix(line, "ELECTRA_FORK_VERSION:") {
-			currentForkVersion = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "ELECTRA_FORK_VERSION:")), "'")
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return "", "", err
-	}
-
-	currentForkVersion = strings.TrimPrefix(currentForkVersion, "0x")
-	nextForkVersion = strings.TrimPrefix(nextForkVersion, "0x")
-	return currentForkVersion, nextForkVersion, nil
-}
-
-func computeTimeBasedForkID(cfg LocalForkConfig) (string, string, error) {
-	genesisHex := strings.TrimPrefix(cfg.GenesisHashHex, "0x")
-	genesisHash, err := hex.DecodeString(genesisHex)
-	if err != nil {
-		return "", "", err
-	}
-	if len(genesisHash) != 32 {
-		return "", "", fmt.Errorf("genesis hash must be 32 bytes")
-	}
-
-	type namedFork struct {
-		name string
-		time uint64
-	}
-	forks := make([]namedFork, 0, len(cfg.ForkTimes))
-	for name, value := range cfg.ForkTimes {
-		if value == 0 || value == math.MaxUint64 {
-			continue
-		}
-		forks = append(forks, namedFork{name: name, time: value})
-	}
-	sort.Slice(forks, func(i, j int) bool {
-		return forks[i].time < forks[j].time
-	})
-
-	hash := crc32.ChecksumIEEE(genesisHash)
-	now := uint64(time.Now().Unix())
-	for _, fork := range forks {
-		if fork.time <= cfg.GenesisTime {
-			continue
-		}
-		if fork.time <= now {
-			hash = crc32.Update(hash, crc32.IEEETable, uint64ToBytes(fork.time))
-			continue
-		}
-		return fmt.Sprintf("%08x", hash), fmt.Sprintf("%x", fork.time), nil
-	}
-	return fmt.Sprintf("%08x", hash), "0", nil
-}
-
-type LocalForkConfig struct {
-	Name           string            `json:"name"`
-	ChainID        uint64            `json:"chainId"`
-	RPCURL         string            `json:"rpcUrl,omitempty"`
-	GenesisHashHex string            `json:"genesisHashHex,omitempty"`
-	GenesisTime    uint64            `json:"genesisTime,omitempty"`
-	ForkID         string            `json:"forkId,omitempty"`
-	ForkNext       string            `json:"forkNext,omitempty"`
-	ForkTimes      map[string]uint64 `json:"forkTimes,omitempty"`
-}
-
-func uint64ToBytes(value uint64) []byte {
-	buf := make([]byte, 8)
-	for i := 7; i >= 0; i-- {
-		buf[i] = byte(value)
-		value >>= 8
-	}
-	return buf
+	return output, nil
 }
