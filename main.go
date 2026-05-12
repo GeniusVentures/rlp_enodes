@@ -28,8 +28,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -73,17 +75,19 @@ type AppConfig struct {
 // Compound AND: set both enrField AND forkHashes together with either
 // "enr_field" or "fork_hash_list" as filterType to require both conditions.
 type ChainConfig struct {
-	Name        string   `json:"name"`
-	ChainID     int      `json:"chainId"`
-	GenesisHex  string   `json:"genesisHex,omitempty"`
-	Description string   `json:"description,omitempty"`
-	FilterType  string   `json:"filterType"`
-	SourceURL   string   `json:"sourceUrl,omitempty"`
-	SourceKey   string   `json:"sourceKey,omitempty"`
-	Network     string   `json:"network,omitempty"`    // geth_network
-	EnrField    string   `json:"enrField,omitempty"`   // enr_field (or compound)
-	ForkHashes  []string `json:"forkHashes,omitempty"` // fork_hash_list (or compound)
-	TopN        int      `json:"topN,omitempty"`
+	Name          string   `json:"name"`
+	ChainID       int      `json:"chainId"`
+	GenesisHex    string   `json:"genesisHex,omitempty"`
+	Description   string   `json:"description,omitempty"`
+	FilterType    string   `json:"filterType"`
+	SourceURL     string   `json:"sourceUrl,omitempty"`
+	SourceKey     string   `json:"sourceKey,omitempty"`
+	Network       string   `json:"network,omitempty"`    // geth_network
+	EnrField      string   `json:"enrField,omitempty"`   // enr_field (or compound)
+	ForkHashes    []string `json:"forkHashes,omitempty"` // fork_hash_list (or compound)
+	TopN          int      `json:"topN,omitempty"`
+	ForkConfigURL string   `json:"forkConfigUrl,omitempty"`
+	ForkConfigPath string   `json:"forkConfigPath,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -112,7 +116,7 @@ type OutputNode struct {
 	Score        int       `json:"score"`
 	LastResponse time.Time `json:"lastResponse,omitempty"`
 	ForkID       string    `json:"-"`
-	ForkNext     uint64    `json:"forkNext,omitempty"`
+	ForkNext     string    `json:"forkNext,omitempty"`
 	IP           string    `json:"ip,omitempty"`
 	Port         int       `json:"port,omitempty"`
 }
@@ -121,7 +125,8 @@ type OutputNode struct {
 type ChainOutput struct {
 	NetworkID  int          `json:"networkId"`
 	GenesisHex string       `json:"genesisHex"`
-	ForkID     string       `json:"forkId,omitempty"`
+	ForkID     string       `json:"forkId"`
+	ForkNext   string       `json:"forkNext"`
 	Nodes      []OutputNode `json:"nodes"`
 }
 
@@ -134,7 +139,7 @@ type candidateNode struct {
 	record   NodeRecord
 	node     *enode.Node
 	forkHash string // hex-encoded 4-byte fork hash, or "" if no eth entry
-	forkNext uint64
+	forkNext string
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +191,7 @@ func main() {
 		if topN <= 0 {
 			topN = defaultTopN
 		}
-		nodes, err := processChain(chain, allNodes, outDir, topN)
+		nodes, dominantFork, err := processChain(chain, allNodes, outDir, topN)
 		if err != nil {
 			log.Printf("ERROR processing chain %s: %v", chain.Name, err)
 			continue
@@ -194,10 +199,37 @@ func main() {
 		if nodes == nil {
 			nodes = []OutputNode{}
 		}
+		forkID := dominantFork
+		if forkID == "" {
+			forkID = chainForkID(nodes)
+		}
+		forkNext := chainForkNext(nodes)
+		if forkID == "" && chain.ForkConfigURL != "" {
+			configForkID, configForkNext, err := loadForkConfig(chain)
+			if err != nil {
+				log.Printf("ERROR loading fork config for chain %s: %v", chain.Name, err)
+			} else {
+				forkID = configForkID
+				forkNext = configForkNext
+			}
+		} else if forkID == "" && chain.ForkConfigURL != "" {
+			configForkID, configForkNext, err := loadRemoteForkConfig(chain.ForkConfigURL)
+			if err != nil {
+				log.Printf("ERROR loading remote fork config for chain %s: %v", chain.Name, err)
+			} else {
+				forkID = configForkID
+				forkNext = configForkNext
+			}
+		}
+		if ( forkID == "" || forkNext == "" ) && len(nodes) > 0 {
+			forkID = chainForkID(nodes)
+			forkNext = chainForkNext(nodes)
+		}
 		chainEnodes[chain.Name] = ChainOutput{
 			NetworkID:  chain.ChainID,
 			GenesisHex: chain.GenesisHex,
-			ForkID:     chainForkID(nodes),
+			ForkID:     forkID,
+			ForkNext:   forkNext,
 			Nodes:      nodes,
 		}
 	}
@@ -242,7 +274,12 @@ func loadAllJSON(localFile, url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("http get: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("WARNING closing response body for %s: %v", url, closeErr)
+		}
+	}()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("http status %d", resp.StatusCode)
 	}
@@ -256,7 +293,12 @@ func loadTextURL(url string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("http get: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("WARNING closing response body for %s: %v", url, closeErr)
+		}
+	}()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("http status %d", resp.StatusCode)
 	}
@@ -444,17 +486,19 @@ func printDiscovery(allNodes map[string]NodeRecord) {
 // Core pipeline
 // ---------------------------------------------------------------------------
 
-func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int) ([]OutputNode, error) {
+func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int) ([]OutputNode, string, error) {
 	if chain.FilterType == "bootnodes_yaml" {
-		return processBootnodesYAMLChain(chain, outputDir, topN)
+		nodes, err := processBootnodesYAMLChain(chain, outputDir, topN)
+		return nodes, "", err
 	}
 	if chain.FilterType == "bootnodes_go" {
-		return processBootnodesGOChain(chain, outputDir, topN)
+		nodes, err := processBootnodesGOChain(chain, outputDir, topN)
+		return nodes, "", err
 	}
 
 	filter, err := buildFilter(chain)
 	if err != nil {
-		return nil, fmt.Errorf("build filter: %w", err)
+		return nil, "", fmt.Errorf("build filter: %w", err)
 	}
 
 	// Step 1: collect matching candidates.
@@ -477,13 +521,14 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 		})
 	}
 
+	var dominant string
 	if len(candidates) == 0 {
 		log.Printf("[%s] No matching nodes found", chain.Name)
 	} else {
 		log.Printf("[%s] Matched %d nodes (all fork versions)", chain.Name, len(candidates))
 
 		// Step 2: find the dominant fork hash (highest aggregate score).
-		dominant := dominantForkHash(candidates)
+		dominant = dominantForkHash(candidates)
 		log.Printf("[%s] Dominant fork hash: %s", chain.Name, dominant)
 
 		// Step 3: filter to dominant fork hash only.
@@ -516,19 +561,19 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 		}
 
 		// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
-		if err := writeChainOutput(chain, output, outputDir); err != nil {
-			return nil, fmt.Errorf("write chain output: %w", err)
+		if err := writeChainOutput(chain, output, outputDir, dominant, chainForkNext(output)); err != nil {
+			return nil, "", fmt.Errorf("write chain output: %w", err)
 		}
-		return output, nil
+		return output, dominant, nil
 	}
 
 	output := []OutputNode{}
 
 	// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
-	if err := writeChainOutput(chain, output, outputDir); err != nil {
-		return nil, fmt.Errorf("write chain output: %w", err)
+	if err := writeChainOutput(chain, output, outputDir, dominant, chainForkNext(output)); err != nil {
+		return nil, "", fmt.Errorf("write chain output: %w", err)
 	}
-	return output, nil
+	return output, dominant, nil
 }
 
 func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
@@ -589,7 +634,33 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 		output = output[:topN]
 	}
 
-	if err := writeChainOutput(chain, output, outputDir); err != nil {
+	forkID := chainForkID(output)
+	forkNext := chainForkNext(output)
+	if ( forkID == "" || forkNext == "" ) && chain.ForkConfigPath != "" {
+		configForkID, configForkNext, err := loadForkConfig(chain)
+		if err != nil {
+			return nil, fmt.Errorf("load fork config: %w", err)
+		}
+		if forkID == "" {
+			forkID = configForkID
+		}
+		if forkNext == "" {
+			forkNext = configForkNext
+		}
+	} else if ( forkID == "" || forkNext == "" ) && chain.ForkConfigURL != "" {
+		configForkID, configForkNext, err := loadRemoteForkConfig(chain.ForkConfigURL)
+		if err != nil {
+			return nil, fmt.Errorf("load remote fork config: %w", err)
+		}
+		if forkID == "" {
+			forkID = configForkID
+		}
+		if forkNext == "" {
+			forkNext = configForkNext
+		}
+	}
+
+	if err := writeChainOutput(chain, output, outputDir, forkID, forkNext); err != nil {
 		return nil, fmt.Errorf("write chain output: %w", err)
 	}
 	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), filepath.Join(outputDir, chain.Name+".json"))
@@ -732,15 +803,15 @@ func buildForkHashListFilter(hashes []string) nodeFilter {
 // Fork ID helpers
 // ---------------------------------------------------------------------------
 
-func extractForkID(n *enode.Node) (hashHex string, next uint64) {
+func extractForkID(n *enode.Node) (hashHex string, next string) {
 	var eth struct {
 		ForkID forkid.ID
 		Tail   []rlp.RawValue `rlp:"tail"`
 	}
 	if n.Load(enr.WithEntry("eth", &eth)) != nil {
-		return "", 0
+		return "", ""
 	}
-	return fmt.Sprintf("%x", eth.ForkID.Hash), eth.ForkID.Next
+	return fmt.Sprintf("%x", eth.ForkID.Hash), fmt.Sprintf("%x", eth.ForkID.Next)
 }
 
 // dominantForkHash returns the fork hash (hex) with the highest aggregate node
@@ -818,14 +889,24 @@ func chainForkID(nodes []OutputNode) string {
 	return ""
 }
 
+func chainForkNext(nodes []OutputNode) string {
+	for _, node := range nodes {
+		if node.ForkNext != "" {
+			return node.ForkNext
+		}
+	}
+	return ""
+}
+
 // writeChainOutput writes a ChainOutput to outputDir/{chainName}.json.
-func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string) error {
+func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string, forkID string, forkNext string) error {
 	outPath := filepath.Join(outputDir, chain.Name+".json")
 	tmpPath := outPath + ".tmp"
 	chainOutput := ChainOutput{
 		NetworkID:  chain.ChainID,
 		GenesisHex: chain.GenesisHex,
-		ForkID:     chainForkID(nodes),
+		ForkID:     forkID,
+		ForkNext:   forkNext,
 		Nodes:      nodes,
 	}
 	data, err := json.MarshalIndent(chainOutput, "", "  ")
@@ -840,4 +921,121 @@ func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string) e
 	}
 	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(nodes), outPath)
 	return nil
+}
+
+func loadForkConfig(chain ChainConfig) (string, string, error) {
+	if chain.ForkConfigPath == "" {
+		return "", "", fmt.Errorf("missing fork config path")
+	}
+
+	data, err := os.ReadFile(chain.ForkConfigPath)
+	if err != nil {
+		return "", "", err
+	}
+
+	var cfg LocalForkConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return "", "", err
+	}
+	if cfg.ForkID != "" || cfg.ForkNext != "" {
+		return strings.TrimPrefix(cfg.ForkID, "0x"), strings.TrimPrefix(cfg.ForkNext, "0x"), nil
+	}
+	return computeTimeBasedForkID(cfg)
+}
+
+func loadRemoteForkConfig(url string) (string, string, error) {
+	if url == "" {
+		return "", "", fmt.Errorf("missing fork config url")
+	}
+
+	raw, err := loadTextURL(url)
+	if err != nil {
+		return "", "", err
+	}
+
+	var (
+		currentForkVersion string
+		nextForkVersion    string
+	)
+	scanner := bufio.NewScanner(strings.NewReader(string(raw)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") || line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "FULU_FORK_VERSION:") {
+			nextForkVersion = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "FULU_FORK_VERSION:")), "'")
+			continue
+		}
+		if strings.HasPrefix(line, "ELECTRA_FORK_VERSION:") {
+			currentForkVersion = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "ELECTRA_FORK_VERSION:")), "'")
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", "", err
+	}
+
+	currentForkVersion = strings.TrimPrefix(currentForkVersion, "0x")
+	nextForkVersion = strings.TrimPrefix(nextForkVersion, "0x")
+	return currentForkVersion, nextForkVersion, nil
+}
+
+func computeTimeBasedForkID(cfg LocalForkConfig) (string, string, error) {
+	genesisHex := strings.TrimPrefix(cfg.GenesisHashHex, "0x")
+	genesisHash, err := hex.DecodeString(genesisHex)
+	if err != nil {
+		return "", "", err
+	}
+	if len(genesisHash) != 32 {
+		return "", "", fmt.Errorf("genesis hash must be 32 bytes")
+	}
+
+	type namedFork struct {
+		name string
+		time uint64
+	}
+	forks := make([]namedFork, 0, len(cfg.ForkTimes))
+	for name, value := range cfg.ForkTimes {
+		if value == 0 || value == math.MaxUint64 {
+			continue
+		}
+		forks = append(forks, namedFork{name: name, time: value})
+	}
+	sort.Slice(forks, func(i, j int) bool {
+		return forks[i].time < forks[j].time
+	})
+
+	hash := crc32.ChecksumIEEE(genesisHash)
+	now := uint64(time.Now().Unix())
+	for _, fork := range forks {
+		if fork.time <= cfg.GenesisTime {
+			continue
+		}
+		if fork.time <= now {
+			hash = crc32.Update(hash, crc32.IEEETable, uint64ToBytes(fork.time))
+			continue
+		}
+		return fmt.Sprintf("%08x", hash), fmt.Sprintf("%x", fork.time), nil
+	}
+	return fmt.Sprintf("%08x", hash), "0", nil
+}
+
+type LocalForkConfig struct {
+	Name           string            `json:"name"`
+	ChainID        uint64            `json:"chainId"`
+	RPCURL         string            `json:"rpcUrl,omitempty"`
+	GenesisHashHex string            `json:"genesisHashHex,omitempty"`
+	GenesisTime    uint64            `json:"genesisTime,omitempty"`
+	ForkID         string            `json:"forkId,omitempty"`
+	ForkNext       string            `json:"forkNext,omitempty"`
+	ForkTimes      map[string]uint64 `json:"forkTimes,omitempty"`
+}
+
+func uint64ToBytes(value uint64) []byte {
+	buf := make([]byte, 8)
+	for i := 7; i >= 0; i-- {
+		buf[i] = byte(value)
+		value >>= 8
+	}
+	return buf
 }

@@ -1,0 +1,18 @@
+{
+  "name": "base-mainnet",
+  "chainId": 8453,
+  "rpcUrl": "https://mainnet.base.org",
+  "genesisHashHex": "0xf712aa9241cc24369b143cf6dce85f0902a9731e70d66818a3a5845b296c73dd",
+  "genesisTime": 1686789347,
+  "source": "Manually maintained from Base documentation and public network upgrade announcements.",
+  "forkTimes": {
+    "canyon": 1704992401,
+    "delta": 1708560000,
+    "ecotone": 1710374401,
+    "fjord": 1720627201,
+    "granite": 1726070401,
+    "holocene": 1736445601,
+    "isthmus": 1746806401,
+    "jovian": 1764691201
+  }
+}

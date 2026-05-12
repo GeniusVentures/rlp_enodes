@@ -1,0 +1,19 @@
+{
+  "name": "base-sepolia",
+  "chainId": 84532,
+  "rpcUrl": "https://sepolia.base.org",
+  "genesisHashHex": "0x0dcc9e089e30b90ddfc55be9a37dd15bc551aeee999d2e2b51414c54eaf934e4",
+  "genesisTime": 1695768288,
+  "source": "Manually maintained from Base documentation and public network upgrade announcements.",
+  "forkTimes": {
+    "canyon": 1699981200,
+    "delta": 1703203200,
+    "ecotone": 1708534800,
+    "fjord": 1716998400,
+    "granite": 1723478400,
+    "holocene": 1732633200,
+    "pectra_blob_schedule": 1742486400,
+    "isthmus": 1744905600,
+    "jovian": 1763568001
+  }
+}

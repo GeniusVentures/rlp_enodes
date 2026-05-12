@@ -99,6 +99,7 @@
       "filterType": "bootnodes_go",
       "sourceUrl": "https://raw.githubusercontent.com/base/op-geth/78436b6ae2a45a9c8449a9b0c93b062a37bd20da/params/bootnodes.go",
       "sourceKey": "OPMainnetBootnodes",
+      "forkConfigPath": "config/base-mainnet.json",
       "topN": 100
     },
     {
@@ -109,6 +110,7 @@
       "filterType": "bootnodes_go",
       "sourceUrl": "https://raw.githubusercontent.com/base/op-geth/78436b6ae2a45a9c8449a9b0c93b062a37bd20da/params/bootnodes.go",
       "sourceKey": "OPSepoliaBootnodes",
+      "forkConfigPath": "config/base-sepolia.json",
       "topN": 50
     },
     {
@@ -118,6 +120,7 @@
       "description": "Gnosis Chain (xDai) — sourced from the official Gnosis bootnodes YAML.",
       "filterType": "bootnodes_yaml",
       "sourceUrl": "https://raw.githubusercontent.com/gnosischain/configs/refs/heads/main/mainnet/bootnodes.yaml",
+      "forkConfigPath": "config/gnosis-chain.json",
       "topN": 100
     }
   ]
