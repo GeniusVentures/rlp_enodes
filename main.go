@@ -12,6 +12,7 @@ func main() {
 	configPath := flag.String("config", "chains_config.json", "path to chains_config.json")
 	inputFile := flag.String("input", "", "local all.json file to use instead of downloading")
 	discover := flag.Bool("discover", false, "print fork-hash discovery summary and exit")
+	forkIDsOnly := flag.Bool("fork-ids-only", false, "generate output/fork_ids.json and exit")
 	baseAll := flag.Bool("base-all", false, "crawl Base bootnodes and write output/base-all.json")
 	baseNetwork := flag.String("base-network", "mainnet", "Base network for -base-all: mainnet or sepolia")
 	flag.Parse()
@@ -59,6 +60,18 @@ func main() {
 		return
 	}
 
+	forkIDs := collectForkIDs(cfg, allNodes)
+	if err := writeForkIDs(outDir, forkIDs); err != nil {
+		log.Fatalf("write fork_ids.json: %v", err)
+	}
+	forkIDs, err = loadForkIDs(outDir)
+	if err != nil {
+		log.Fatalf("load fork_ids.json: %v", err)
+	}
+	if *forkIDsOnly {
+		return
+	}
+
 	defaultTopN := cfg.DefaultTopN
 	if defaultTopN <= 0 {
 		defaultTopN = 100
@@ -84,7 +97,7 @@ func main() {
 		if topN <= 0 {
 			topN = defaultTopN
 		}
-		nodes, dominantFork, err := processChain(chain, allNodes, outDir, topN)
+		nodes, dominantFork, err := processChain(chain, allNodes, outDir, topN, forkIDs)
 		if err != nil {
 			log.Printf("ERROR processing chain %s: %v", chain.Name, err)
 			continue
@@ -93,23 +106,10 @@ func main() {
 			nodes = []OutputNode{}
 		}
 		fork := dominantFork
-		if fork.forkID == "" {
+		if forkIDTuple, ok := currentForkTupleForChain(chain, forkIDs); ok {
+			fork = forkIDTuple
+		} else if fork.forkID == "" {
 			fork = chainForkTuple(nodes)
-		}
-		if (fork.forkID == "" || fork.forkNext == "") && chain.ForkConfigPath != "" {
-			configForkID, configForkNext, err := loadForkConfig(chain)
-			if err != nil {
-				log.Printf("ERROR loading fork config for chain %s: %v", chain.Name, err)
-			} else {
-				fork = forkTuple{forkID: configForkID, forkNext: configForkNext}
-			}
-		} else if (fork.forkID == "" || fork.forkNext == "") && chain.ForkConfigURL != "" {
-			configForkID, configForkNext, err := loadRemoteForkConfig(chain.ForkConfigURL)
-			if err != nil {
-				log.Printf("ERROR loading remote fork config for chain %s: %v", chain.Name, err)
-			} else {
-				fork = forkTuple{forkID: configForkID, forkNext: configForkNext}
-			}
 		}
 		chainEnodes[chain.Name] = ChainOutput{
 			NetworkID:  chain.ChainID,

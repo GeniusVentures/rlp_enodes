@@ -46,6 +46,12 @@
       "description": "BNB Smart Chain Mainnet — identified by the 'bsc' ENR field; dominant fork auto-selected",
       "filterType": "enr_field",
       "enrField": "bsc",
+      "rpcUrl": "https://bsc-dataseed.binance.org",
+      "forkProvider": "bsc",
+      "forkSourceUrl": "https://raw.githubusercontent.com/bnb-chain/bsc",
+      "forkSourceRef": "v1.7.3",
+      "forkConfigName": "BSCChainConfig",
+      "forkGenesisName": "BSCGenesisHash",
       "topN": 100
     },
     {
@@ -55,6 +61,12 @@
       "description": "BNB Smart Chain Chapel Testnet — compound filter: 'bsc' ENR field AND non-mainnet fork hash. Run -discover to update forkHashes after Chapel upgrades.",
       "filterType": "enr_field",
       "enrField": "bsc",
+      "rpcUrl": "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
+      "forkProvider": "bsc",
+      "forkSourceUrl": "https://raw.githubusercontent.com/bnb-chain/bsc",
+      "forkSourceRef": "v1.7.3",
+      "forkConfigName": "ChapelChainConfig",
+      "forkGenesisName": "ChapelGenesisHash",
       "forkHashes": [
         "ef54c1e1"
       ],
@@ -66,7 +78,14 @@
       "genesisHex": "a9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b",
       "description": "Polygon PoS Mainnet — sourced from Polygon ENR tree.",
       "filterType": "bootnodes_enrtree",
+      "network": "mainnet",
+      "rpcUrl": "https://polygon-bor-rpc.publicnode.com",
       "sourceUrl": "enrtree://AKUEZKN7PSKVNR65FZDHECMKOJQSGPARGTPPBI7WS2VUL4EGR6XPC@pos.polygon-peers.io",
+      "forkProvider": "polygon_bor",
+      "forkSourceUrl": "https://raw.githubusercontent.com/0xPolygon/bor",
+      "forkSourceRef": "v2.2.11",
+      "forkConfigName": "BorMainnetChainConfig",
+      "forkGenesisName": "BorMainnetGenesisHash",
       "topN": 100
     },
     {
@@ -75,7 +94,14 @@
       "genesisHex": "7202b2b53c5a0836e773e319d18922cc756dd67432f9a1f65352b61f4406c697",
       "description": "Polygon Amoy Testnet — sourced from Polygon ENR tree.",
       "filterType": "bootnodes_enrtree",
+      "network": "amoy",
+      "rpcUrl": "https://polygon-amoy-bor-rpc.publicnode.com",
       "sourceUrl": "enrtree://AKUEZKN7PSKVNR65FZDHECMKOJQSGPARGTPPBI7WS2VUL4EGR6XPC@amoy.polygon-peers.io",
+      "forkProvider": "polygon_bor",
+      "forkSourceUrl": "https://raw.githubusercontent.com/0xPolygon/bor",
+      "forkSourceRef": "v2.2.11",
+      "forkConfigName": "AmoyChainConfig",
+      "forkGenesisName": "AmoyGenesisHash",
       "topN": 50
     },
     {
@@ -86,7 +112,11 @@
       "filterType": "bootnodes_go",
       "sourceUrl": "https://raw.githubusercontent.com/base/op-geth/78436b6ae2a45a9c8449a9b0c93b062a37bd20da/params/bootnodes.go",
       "sourceKey": "OPMainnetBootnodes",
-      "forkConfigPath": "config/base-mainnet.json",
+      "network": "mainnet",
+      "forkProvider": "op_stack_superchain",
+      "forkSourceUrl": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry",
+      "forkSourceRef": "main",
+      "forkConfigName": "superchain",
       "topN": 100
     },
     {
@@ -97,7 +127,11 @@
       "filterType": "bootnodes_go",
       "sourceUrl": "https://raw.githubusercontent.com/base/op-geth/78436b6ae2a45a9c8449a9b0c93b062a37bd20da/params/bootnodes.go",
       "sourceKey": "OPSepoliaBootnodes",
-      "forkConfigPath": "config/base-sepolia.json",
+      "network": "sepolia",
+      "forkProvider": "op_stack_superchain",
+      "forkSourceUrl": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry",
+      "forkSourceRef": "main",
+      "forkConfigName": "superchain",
       "topN": 50
     },
     {

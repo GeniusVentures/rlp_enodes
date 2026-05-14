@@ -31,19 +31,25 @@ type AppConfig struct {
 // Compound AND: set both enrField AND forkHashes together with either
 // "enr_field" or "fork_hash_list" as filterType to require both conditions.
 type ChainConfig struct {
-	Name           string   `json:"name"`
-	ChainID        int      `json:"chainId"`
-	GenesisHex     string   `json:"genesisHex,omitempty"`
-	Description    string   `json:"description,omitempty"`
-	FilterType     string   `json:"filterType"`
-	SourceURL      string   `json:"sourceUrl,omitempty"`
-	SourceKey      string   `json:"sourceKey,omitempty"`
-	Network        string   `json:"network,omitempty"`    // geth_network / polygon_bor
-	EnrField       string   `json:"enrField,omitempty"`   // enr_field (or compound)
-	ForkHashes     []string `json:"forkHashes,omitempty"` // fork_hash_list (or compound)
-	TopN           int      `json:"topN,omitempty"`
-	ForkConfigURL  string   `json:"forkConfigUrl,omitempty"`
-	ForkConfigPath string   `json:"forkConfigPath,omitempty"`
+	Name            string   `json:"name"`
+	ChainID         int      `json:"chainId"`
+	GenesisHex      string   `json:"genesisHex,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	FilterType      string   `json:"filterType"`
+	SourceURL       string   `json:"sourceUrl,omitempty"`
+	SourceKey       string   `json:"sourceKey,omitempty"`
+	RPCURL          string   `json:"rpcUrl,omitempty"`
+	Network         string   `json:"network,omitempty"`    // geth_network / polygon_bor
+	EnrField        string   `json:"enrField,omitempty"`   // enr_field (or compound)
+	ForkHashes      []string `json:"forkHashes,omitempty"` // fork_hash_list (or compound)
+	TopN            int      `json:"topN,omitempty"`
+	ForkProvider    string   `json:"forkProvider,omitempty"`
+	ForkSourceURL   string   `json:"forkSourceUrl,omitempty"`
+	ForkSourceRef   string   `json:"forkSourceRef,omitempty"`
+	ForkConfigName  string   `json:"forkConfigName,omitempty"`
+	ForkGenesisName string   `json:"forkGenesisName,omitempty"`
+	ForkConfigURL   string   `json:"forkConfigUrl,omitempty"`
+	ForkConfigPath  string   `json:"forkConfigPath,omitempty"`
 }
 
 // NodeRecord mirrors one entry in all.json.
@@ -109,3 +115,20 @@ type polygonBorForkConfig struct {
 	genesisHex  string
 	borForks    []*big.Int
 }
+
+type ForkTupleOutput struct {
+	ForkID   string `json:"forkId"`
+	ForkNext string `json:"forkNext"`
+}
+
+type ForkIDOutput struct {
+	ChainID     int               `json:"chainId"`
+	GenesisHex  string            `json:"genesisHex"`
+	ForkID      string            `json:"forkId"`
+	ForkNext    string            `json:"forkNext"`
+	Source      string            `json:"source"`
+	GeneratedAt time.Time         `json:"generatedAt"`
+	Forks       []ForkTupleOutput `json:"forks,omitempty"`
+}
+
+type ForkIDIndex map[string]ForkIDOutput

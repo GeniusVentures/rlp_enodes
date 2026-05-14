@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"crypto/ecdsa"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -24,7 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/core"
+	"reflect"
+
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
@@ -96,15 +96,11 @@ func signChainData(data map[string]ChainOutput, privateKey *ecdsa.PrivateKey) (s
 	msgHash := sha256.Sum256(jsonBytes)
 
 	// Sign the hash with ECDSA (secp256k1)
-	r, s, err := ecdsa.Sign(rand.Reader, privateKey, msgHash[:])
+	sigBytes, err := crypto.Sign(msgHash[:], privateKey)
 	if err != nil {
 		return "", "", fmt.Errorf("sign hash: %w", err)
 	}
 
-	// Encode signature as hex (r + s, each 32 bytes)
-	sigBytes := make([]byte, 64)
-	r.FillBytes(sigBytes[:32])
-	s.FillBytes(sigBytes[32:])
 	signature := "0x" + hex.EncodeToString(sigBytes)
 
 	signerAddress := getSignerAddress(privateKey)
@@ -142,22 +138,17 @@ func verifyChainDataSignature(data map[string]ChainOutput, signature string, sig
 	if err != nil {
 		return false, fmt.Errorf("decode signature hex: %w", err)
 	}
-	if len(sigBytes) != 64 {
-		return false, fmt.Errorf("invalid signature length: expected 64 bytes, got %d", len(sigBytes))
+	if len(sigBytes) != crypto.SignatureLength {
+		return false, fmt.Errorf("invalid signature length: expected %d bytes, got %d", crypto.SignatureLength, len(sigBytes))
 	}
 
-	// Parse r and s from the signature bytes
-	r := new(big.Int).SetBytes(sigBytes[:32])
-	s := new(big.Int).SetBytes(sigBytes[32:])
+	publicKey, err := crypto.SigToPub(msgHash[:], sigBytes)
+	if err != nil {
+		return false, fmt.Errorf("recover signer public key: %w", err)
+	}
 
-	// For full verification, we'd need to recover the public key from r, s and compare the address.
-	// For now, we just verify the signature is well-formed.
-	_ = r
-	_ = s
-	_ = signerAddress
-	_ = msgHash
-
-	return true, nil // Simplified; full recovery would require secp256k1 library
+	recoveredAddress := crypto.PubkeyToAddress(*publicKey).Hex()
+	return strings.EqualFold(recoveredAddress, signerAddress), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -426,21 +417,21 @@ func printDiscovery(allNodes map[string]NodeRecord) {
 // Core pipeline
 // ---------------------------------------------------------------------------
 
-func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int) ([]OutputNode, forkTuple, error) {
+func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, forkTuple, error) {
 	if chain.FilterType == "bootnodes_yaml" {
-		nodes, err := processBootnodesYAMLChain(chain, outputDir, topN)
+		nodes, err := processBootnodesYAMLChain(chain, outputDir, topN, forkIDs)
 		return nodes, forkTuple{}, err
 	}
 	if chain.FilterType == "bootnodes_go" {
-		nodes, err := processBootnodesGOChain(chain, outputDir, topN)
+		nodes, err := processBootnodesGOChain(chain, outputDir, topN, forkIDs)
 		return nodes, forkTuple{}, err
 	}
 	if chain.FilterType == "bootnodes_enrtree" {
-		nodes, err := processBootnodesENRTreeChain(chain, outputDir, topN)
+		nodes, err := processBootnodesENRTreeChain(chain, outputDir, topN, forkIDs)
 		return nodes, forkTuple{}, err
 	}
 
-	filter, err := buildFilter(chain)
+	filter, err := buildFilter(chain, forkIDs)
 	if err != nil {
 		return nil, forkTuple{}, fmt.Errorf("build filter: %w", err)
 	}
@@ -456,6 +447,9 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 			continue
 		}
 		fh, fn := extractForkID(n)
+		if chain.FilterType == "geth_network" && fh == "" {
+			continue
+		}
 		candidates = append(candidates, candidateNode{
 			nodeID:   nodeID,
 			record:   record,
@@ -505,30 +499,37 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 		}
 
 		// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
-		if err := writeChainOutput(chain, output, outputDir, dominant.forkID, dominant.forkNext); err != nil {
+		writeFork := dominant
+		if forkIDTuple, ok := currentForkTupleForChain(chain, forkIDs); ok {
+			writeFork = forkIDTuple
+		}
+		if err := writeChainOutput(chain, output, outputDir, writeFork.forkID, writeFork.forkNext); err != nil {
 			return nil, forkTuple{}, fmt.Errorf("write chain output: %w", err)
 		}
-		return output, dominant, nil
+		return output, writeFork, nil
 	}
 
 	output := []OutputNode{}
 
 	// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
+	if forkIDTuple, ok := currentForkTupleForChain(chain, forkIDs); ok {
+		dominant = forkIDTuple
+	}
 	if err := writeChainOutput(chain, output, outputDir, dominant.forkID, dominant.forkNext); err != nil {
 		return nil, forkTuple{}, fmt.Errorf("write chain output: %w", err)
 	}
 	return output, dominant, nil
 }
 
-func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
+func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, error) {
 	bootnodes, err := loadBootnodesYAML(chain.SourceURL)
 	if err != nil {
 		return nil, fmt.Errorf("load bootnodes yaml: %w", err)
 	}
-	return processBootnodeRecords(chain, bootnodes, outputDir, topN)
+	return processBootnodeRecords(chain, bootnodes, outputDir, topN, forkIDs)
 }
 
-func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
+func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, error) {
 	bootnodes, err := loadBootnodesGo(chain.SourceURL, chain.SourceKey)
 	if err != nil {
 		return nil, fmt.Errorf("load bootnodes go: %w", err)
@@ -536,19 +537,20 @@ func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int) ([]O
 	for i := range bootnodes {
 		bootnodes[i] = normalizeGoBootnode(bootnodes[i])
 	}
-	return processBootnodeRecords(chain, bootnodes, outputDir, topN)
+	return processBootnodeRecords(chain, bootnodes, outputDir, topN, forkIDs)
 }
 
-func processBootnodesENRTreeChain(chain ChainConfig, outputDir string, topN int) ([]OutputNode, error) {
+func processBootnodesENRTreeChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, error) {
 	bootnodes, err := loadBootnodesENRTree(chain.SourceURL, topN)
 	if err != nil {
 		return nil, fmt.Errorf("load bootnodes enrtree: %w", err)
 	}
-	return processBootnodeRecords(chain, bootnodes, outputDir, topN)
+	return processBootnodeRecords(chain, bootnodes, outputDir, topN, forkIDs)
 }
 
-func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir string, topN int) ([]OutputNode, error) {
+func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, error) {
 	output := make([]OutputNode, 0, len(bootnodes))
+	wantFork, filterByFork := currentForkTupleForChain(chain, forkIDs)
 	for _, record := range bootnodes {
 		n, err := enode.Parse(enode.ValidSchemes, record)
 		if err != nil {
@@ -565,6 +567,9 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 		if forkHash, forkNext := extractForkID(n); forkHash != "" {
 			out.ForkID = forkHash
 			out.ForkNext = forkNext
+			if filterByFork && (forkHash != wantFork.forkID || forkNext != wantFork.forkNext) {
+				continue
+			}
 		}
 		if ip := n.IP(); ip != nil {
 			out.IP = ip.String()
@@ -587,18 +592,8 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 	}
 
 	fork := chainForkTuple(output)
-	if (fork.forkID == "" || fork.forkNext == "") && chain.ForkConfigPath != "" {
-		configForkID, configForkNext, err := loadForkConfig(chain)
-		if err != nil {
-			return nil, fmt.Errorf("load fork config: %w", err)
-		}
-		fork = forkTuple{forkID: configForkID, forkNext: configForkNext}
-	} else if (fork.forkID == "" || fork.forkNext == "") && chain.ForkConfigURL != "" {
-		configForkID, configForkNext, err := loadRemoteForkConfig(chain.ForkConfigURL)
-		if err != nil {
-			return nil, fmt.Errorf("load remote fork config: %w", err)
-		}
-		fork = forkTuple{forkID: configForkID, forkNext: configForkNext}
+	if forkIDTuple, ok := currentForkTupleForChain(chain, forkIDs); ok {
+		fork = forkIDTuple
 	}
 
 	if err := writeChainOutput(chain, output, outputDir, fork.forkID, fork.forkNext); err != nil {
@@ -610,34 +605,39 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 
 // writeChainEnodes writes a combined chain_enodes.json file mapping each chain
 // name to its chain metadata and node records into outputDir.
-// If SIGNING_KEY environment variable is set, the data is signed and signature/signerAddress
-// fields are included in the JSON.
+// If SIGNING_KEY environment variable is set, the file gets top-level
+// signature/signerAddress fields.
 func writeChainEnodes(outputDir string, chainEnodes map[string]ChainOutput) error {
-	// Load signing key if available
 	privateKey, err := loadSigningKey()
 	if err != nil {
 		return fmt.Errorf("load signing key: %w", err)
 	}
 
-	// Sign the chain data
-	signature, signerAddress, err := signChainData(chainEnodes, privateKey)
+	unsignedChainEnodes := make(map[string]ChainOutput, len(chainEnodes))
+	for name, output := range chainEnodes {
+		output.Signature = ""
+		output.SignerAddress = ""
+		unsignedChainEnodes[name] = output
+	}
+
+	signature, signerAddress, err := signChainData(unsignedChainEnodes, privateKey)
 	if err != nil {
 		return fmt.Errorf("sign chain data: %w", err)
 	}
 
-	// Add signature to all chain outputs
+	finalDocument := make(map[string]interface{}, len(unsignedChainEnodes)+2)
+	for name, output := range unsignedChainEnodes {
+		finalDocument[name] = output
+	}
 	if signature != "" {
-		for name, output := range chainEnodes {
-			output.Signature = signature
-			output.SignerAddress = signerAddress
-			chainEnodes[name] = output
-		}
+		finalDocument["signature"] = signature
+		finalDocument["signerAddress"] = signerAddress
 		log.Printf("Signed chain_enodes.json with signer address %s", signerAddress)
 	}
 
 	outPath := filepath.Join(outputDir, "chain_enodes.json")
 	tmpPath := outPath + ".tmp"
-	data, err := json.MarshalIndent(chainEnodes, "", "  ")
+	data, err := json.MarshalIndent(finalDocument, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -651,8 +651,646 @@ func writeChainEnodes(outputDir string, chainEnodes map[string]ChainOutput) erro
 	return nil
 }
 
+func writeForkIDs(outputDir string, forkIDs map[string]ForkIDOutput) error {
+	outPath := filepath.Join(outputDir, "fork_ids.json")
+	tmpPath := outPath + ".tmp"
+	data, err := json.MarshalIndent(forkIDs, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal fork ids: %w", err)
+	}
+	if err := os.WriteFile(tmpPath, data, 0o644); err != nil {
+		return fmt.Errorf("write tmp fork ids: %w", err)
+	}
+	if err := os.Rename(tmpPath, outPath); err != nil {
+		return fmt.Errorf("rename fork ids: %w", err)
+	}
+	log.Printf("Wrote fork_ids.json → %s", outPath)
+	return nil
+}
+
+func loadForkIDs(outputDir string) (ForkIDIndex, error) {
+	path := filepath.Join(outputDir, "fork_ids.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var forkIDs ForkIDIndex
+	if err := json.Unmarshal(data, &forkIDs); err != nil {
+		return nil, err
+	}
+	return forkIDs, nil
+}
+
+func collectForkIDs(cfg *AppConfig, allNodes map[string]NodeRecord) ForkIDIndex {
+	forkIDs := make(ForkIDIndex)
+	generatedAt := time.Now().UTC()
+	for _, chain := range cfg.Chains {
+		forkID := ""
+		forkNext := ""
+		source := ""
+		var forks []ForkTupleOutput
+
+		if chain.ForkProvider != "" {
+			if tuple, tuples, providerSource, err := collectProviderForkIDs(chain); err == nil {
+				forkID = tuple.forkID
+				forkNext = tuple.forkNext
+				source = providerSource
+				forks = forkTupleOutputs(tuples)
+			} else {
+				log.Printf("[%s] fork provider %q failed: %v", chain.Name, chain.ForkProvider, err)
+			}
+		}
+
+		if forkID == "" && chain.ForkConfigPath != "" {
+			if id, next, err := loadForkConfig(chain); err == nil {
+				forkID = id
+				forkNext = next
+				source = chain.ForkConfigPath
+			}
+		} else if forkID == "" && chain.ForkConfigURL != "" {
+			if id, next, err := loadRemoteForkConfig(chain.ForkConfigURL); err == nil {
+				forkID = id
+				forkNext = next
+				source = chain.ForkConfigURL
+			}
+		} else if forkID == "" && chain.FilterType == "geth_network" {
+			if tuples, err := gethForkTuples(chain); err == nil {
+				forks = make([]ForkTupleOutput, 0, len(tuples))
+				for _, tuple := range tuples {
+					forks = append(forks, ForkTupleOutput{ForkID: tuple.forkID, ForkNext: tuple.forkNext})
+				}
+				if currentTuple, currentErr := currentGethForkTuple(chain); currentErr == nil {
+					forkID = currentTuple.forkID
+					forkNext = currentTuple.forkNext
+				}
+				source = "go-ethereum params"
+			}
+		}
+
+		if forkID == "" && len(chain.ForkHashes) > 0 {
+			forkID = strings.TrimPrefix(chain.ForkHashes[len(chain.ForkHashes)-1], "0x")
+			forkNext = "0"
+			source = "chains_config.json forkHashes"
+			forks = make([]ForkTupleOutput, 0, len(chain.ForkHashes))
+			for _, forkHash := range chain.ForkHashes {
+				forks = append(forks, ForkTupleOutput{ForkID: strings.TrimPrefix(forkHash, "0x"), ForkNext: "0"})
+			}
+		}
+
+		if forkID == "" && allNodes != nil && (chain.FilterType == "enr_field" || chain.FilterType == "fork_hash_list") {
+			if tuple, tuples, ok := discoverForkTuplesForChain(chain, allNodes); ok {
+				forkID = tuple.forkID
+				forkNext = tuple.forkNext
+				source = "all.json discovery"
+				forks = forkTupleOutputs(tuples)
+			}
+		}
+
+		if forkID == "" && chain.FilterType == "bootnodes_enrtree" {
+			if tuple, tuples, err := discoverForkTuplesFromBootnodes(chain); err == nil && tuple.forkID != "" {
+				forkID = tuple.forkID
+				forkNext = tuple.forkNext
+				source = chain.SourceURL
+				forks = forkTupleOutputs(tuples)
+			}
+		}
+
+		if forkID == "" && forkNext == "" && len(forks) == 0 {
+			continue
+		}
+		forkIDs[chain.Name] = ForkIDOutput{
+			ChainID:     chain.ChainID,
+			GenesisHex:  chain.GenesisHex,
+			ForkID:      forkID,
+			ForkNext:    forkNext,
+			Source:      source,
+			GeneratedAt: generatedAt,
+			Forks:       forks,
+		}
+	}
+	return forkIDs
+}
+
+func currentForkTupleForChain(chain ChainConfig, forkIDs ForkIDIndex) (forkTuple, bool) {
+	if forkIDs == nil {
+		return forkTuple{}, false
+	}
+	output, ok := forkIDs[chain.Name]
+	if !ok || output.ForkID == "" || output.ForkNext == "" {
+		return forkTuple{}, false
+	}
+	return forkTuple{forkID: strings.TrimPrefix(output.ForkID, "0x"), forkNext: strings.TrimPrefix(output.ForkNext, "0x")}, true
+}
+
+func forkTuplesForChain(chain ChainConfig, forkIDs ForkIDIndex) []forkTuple {
+	output, ok := forkIDs[chain.Name]
+	if !ok {
+		return nil
+	}
+	tuples := make([]forkTuple, 0, len(output.Forks)+1)
+	for _, tuple := range output.Forks {
+		if tuple.ForkID == "" || tuple.ForkNext == "" {
+			continue
+		}
+		tuples = append(tuples, forkTuple{
+			forkID:   strings.TrimPrefix(tuple.ForkID, "0x"),
+			forkNext: strings.TrimPrefix(tuple.ForkNext, "0x"),
+		})
+	}
+	if output.ForkID != "" && output.ForkNext != "" {
+		current := forkTuple{forkID: strings.TrimPrefix(output.ForkID, "0x"), forkNext: strings.TrimPrefix(output.ForkNext, "0x")}
+		found := false
+		for _, tuple := range tuples {
+			if tuple == current {
+				found = true
+				break
+			}
+		}
+		if !found {
+			tuples = append(tuples, current)
+		}
+	}
+	return tuples
+}
+
+func forkTupleOutputs(tuples []forkTuple) []ForkTupleOutput {
+	output := make([]ForkTupleOutput, 0, len(tuples))
+	seen := make(map[forkTuple]bool)
+	for _, tuple := range tuples {
+		if tuple.forkID == "" || tuple.forkNext == "" || seen[tuple] {
+			continue
+		}
+		seen[tuple] = true
+		output = append(output, ForkTupleOutput{ForkID: tuple.forkID, ForkNext: tuple.forkNext})
+	}
+	return output
+}
+
+func collectProviderForkIDs(chain ChainConfig) (forkTuple, []forkTuple, string, error) {
+	switch chain.ForkProvider {
+	case "bsc":
+		return collectBSCForkIDs(chain)
+	case "polygon_bor":
+		return collectPolygonBorForkIDs(chain)
+	case "op_stack_superchain":
+		return collectOPStackSuperchainForkIDs(chain)
+	default:
+		return forkTuple{}, nil, "", fmt.Errorf("unknown fork provider %q", chain.ForkProvider)
+	}
+}
+
+func collectBSCForkIDs(chain ChainConfig) (forkTuple, []forkTuple, string, error) {
+	ref := chain.ForkSourceRef
+	if ref == "" {
+		return forkTuple{}, nil, "", fmt.Errorf("missing forkSourceRef")
+	}
+	baseURL := strings.TrimRight(chain.ForkSourceURL, "/")
+	if baseURL == "" {
+		baseURL = "https://raw.githubusercontent.com/bnb-chain/bsc"
+	}
+	sourceURL := fmt.Sprintf("%s/%s/params/config.go", baseURL, ref)
+	raw, err := loadTextURL(sourceURL)
+	if err != nil {
+		return forkTuple{}, nil, "", err
+	}
+
+	configName := chain.ForkConfigName
+	genesisName := chain.ForkGenesisName
+	if configName == "" || genesisName == "" {
+		return forkTuple{}, nil, "", fmt.Errorf("missing forkConfigName or forkGenesisName")
+	}
+
+	head, err := loadCurrentBlockNumber(chain.RPCURL)
+	if err != nil {
+		return forkTuple{}, nil, "", err
+	}
+	tuple, tuples, err := forkTuplesFromClientConfig(string(raw), configName, genesisName, head, time.Now())
+	return tuple, tuples, sourceURL, err
+}
+
+func collectPolygonBorForkIDs(chain ChainConfig) (forkTuple, []forkTuple, string, error) {
+	ref := chain.ForkSourceRef
+	if ref == "" {
+		return forkTuple{}, nil, "", fmt.Errorf("missing forkSourceRef")
+	}
+	baseURL := strings.TrimRight(chain.ForkSourceURL, "/")
+	if baseURL == "" {
+		baseURL = "https://raw.githubusercontent.com/0xPolygon/bor"
+	}
+	sourceURL := fmt.Sprintf("%s/%s/params/config.go", baseURL, ref)
+	raw, err := loadTextURL(sourceURL)
+	if err != nil {
+		return forkTuple{}, nil, "", err
+	}
+
+	configName := chain.ForkConfigName
+	genesisName := chain.ForkGenesisName
+	if configName == "" || genesisName == "" {
+		switch chain.Network {
+		case "mainnet":
+			configName = "BorMainnetChainConfig"
+			genesisName = "BorMainnetGenesisHash"
+		case "amoy":
+			configName = "AmoyChainConfig"
+			genesisName = "AmoyGenesisHash"
+		default:
+			return forkTuple{}, nil, "", fmt.Errorf("missing polygon network/config names")
+		}
+	}
+
+	head, err := loadCurrentBlockNumber(chain.RPCURL)
+	if err != nil {
+		return forkTuple{}, nil, "", err
+	}
+	tuple, tuples, err := forkTuplesFromClientConfig(string(raw), configName, genesisName, head, time.Now())
+	return tuple, tuples, sourceURL, err
+}
+
+func collectOPStackSuperchainForkIDs(chain ChainConfig) (forkTuple, []forkTuple, string, error) {
+	ref := chain.ForkSourceRef
+	if ref == "" {
+		return forkTuple{}, nil, "", fmt.Errorf("missing forkSourceRef")
+	}
+	baseURL := strings.TrimRight(chain.ForkSourceURL, "/")
+	if baseURL == "" {
+		baseURL = "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry"
+	}
+	superchain := chain.Network
+	if superchain == "" {
+		return forkTuple{}, nil, "", fmt.Errorf("missing superchain network")
+	}
+	chainName := chain.ForkConfigName
+	if chainName == "" {
+		return forkTuple{}, nil, "", fmt.Errorf("missing superchain chain name")
+	}
+	sourceURL := fmt.Sprintf("%s/%s/superchain/configs/%s/%s.toml", baseURL, ref, superchain, chainName)
+	raw, err := loadTextURL(sourceURL)
+	if err != nil {
+		return forkTuple{}, nil, "", err
+	}
+
+	tuple, tuples, err := forkTuplesFromSuperchainConfig(chain.GenesisHex, string(raw), time.Now())
+	return tuple, tuples, sourceURL, err
+}
+
+func forkTuplesFromClientConfig(src string, configName string, genesisName string, head uint64, now time.Time) (forkTuple, []forkTuple, error) {
+	genesisHex, err := parseClientGenesisHash(src, genesisName)
+	if err != nil {
+		return forkTuple{}, nil, err
+	}
+	block := findStructLiteral(src, configName)
+	if block == "" {
+		return forkTuple{}, nil, fmt.Errorf("chain config %s not found", configName)
+	}
+
+	blockForks, timeForks := parseForkPointsFromStruct(block)
+	if borBlock := findFieldStructLiteral(block, "Bor"); borBlock != "" {
+		borBlockForks, borTimeForks := parseForkPointsFromStruct(borBlock)
+		blockForks = append(blockForks, borBlockForks...)
+		timeForks = append(timeForks, borTimeForks...)
+	}
+	blockForks = dedupUint64s(blockForks)
+	timeForks = dedupUint64s(timeForks)
+	return computeForkTuples(genesisHex, blockForks, timeForks, head, now)
+}
+
+func forkTuplesFromSuperchainConfig(genesisHex string, src string, now time.Time) (forkTuple, []forkTuple, error) {
+	if genesisHex == "" {
+		var err error
+		genesisHex, err = tomlStringField(src, "l2", "hash")
+		if err != nil {
+			return forkTuple{}, nil, err
+		}
+	}
+	hardforks := tomlSection(src, "hardforks")
+	if hardforks == "" {
+		return forkTuple{}, nil, fmt.Errorf("hardforks section not found")
+	}
+
+	re := regexp.MustCompile(`(?m)^\s*[a-zA-Z0-9_]+_time\s*=\s*([0-9]+)(?:\s*#.*)?\s*$`)
+	matches := re.FindAllStringSubmatch(hardforks, -1)
+	timeForks := make([]uint64, 0, len(matches))
+	for _, match := range matches {
+		value, err := strconv.ParseUint(match[1], 10, 64)
+		if err != nil || value == 0 || value == math.MaxUint64 {
+			continue
+		}
+		timeForks = append(timeForks, value)
+	}
+	timeForks = dedupUint64s(timeForks)
+	return computeForkTuples(genesisHex, nil, timeForks, 0, now)
+}
+
+func computeForkTuples(genesisHex string, blockForks []uint64, timeForks []uint64, head uint64, now time.Time) (forkTuple, []forkTuple, error) {
+	genesisHash, err := decodeGenesisHash(genesisHex)
+	if err != nil {
+		return forkTuple{}, nil, err
+	}
+	nowUnix := uint64(now.Unix())
+	hash := crc32.ChecksumIEEE(genesisHash)
+	tuples := make([]forkTuple, 0, len(blockForks)+len(timeForks)+1)
+	var current forkTuple
+	for _, fork := range blockForks {
+		next := forkTuple{forkID: fmt.Sprintf("%08x", hash), forkNext: fmt.Sprintf("%x", fork)}
+		tuples = append(tuples, next)
+		if fork <= head {
+			hash = crc32.Update(hash, crc32.IEEETable, uint64ToBytes(fork))
+			continue
+		}
+		current = next
+		return current, tuples, nil
+	}
+	for _, fork := range timeForks {
+		next := forkTuple{forkID: fmt.Sprintf("%08x", hash), forkNext: fmt.Sprintf("%x", fork)}
+		tuples = append(tuples, next)
+		if fork <= nowUnix {
+			hash = crc32.Update(hash, crc32.IEEETable, uint64ToBytes(fork))
+			continue
+		}
+		current = next
+		return current, tuples, nil
+	}
+
+	current = forkTuple{forkID: fmt.Sprintf("%08x", hash), forkNext: "0"}
+	tuples = append(tuples, current)
+	return current, tuples, nil
+}
+
+func parseClientGenesisHash(src string, name string) (string, error) {
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(name + `\s*=\s*common\.HexToHash\("([^"]+)"\)`),
+		regexp.MustCompile(name + `\s*=\s*common\.HexToHash\(\s*"([^"]+)"\s*\)`),
+	}
+	for _, re := range patterns {
+		if m := re.FindStringSubmatch(src); len(m) == 2 {
+			return m[1], nil
+		}
+	}
+	return "", fmt.Errorf("genesis hash %s not found", name)
+}
+
+func parseForkPointsFromStruct(block string) ([]uint64, []uint64) {
+	re := regexp.MustCompile(`([A-Za-z0-9_]+(?:Block|Time)):\s*(?:big\.NewInt\(([0-9_]+)\)|newUint64\(([0-9_]+)\)|uint64Ptr\(([0-9_]+)\)|uint64\(([0-9_]+)\)|([0-9_]+))`)
+	matches := re.FindAllStringSubmatch(block, -1)
+	blockForks := make([]uint64, 0, len(matches))
+	timeForks := make([]uint64, 0, len(matches))
+	for _, match := range matches {
+		var raw string
+		for i := 2; i < len(match); i++ {
+			if match[i] != "" {
+				raw = match[i]
+				break
+			}
+		}
+		if raw == "" {
+			continue
+		}
+		value, err := strconv.ParseUint(strings.ReplaceAll(raw, "_", ""), 10, 64)
+		if err != nil || value == 0 || value == math.MaxUint64 {
+			continue
+		}
+		if strings.HasSuffix(match[1], "Time") {
+			timeForks = append(timeForks, value)
+			continue
+		}
+		blockForks = append(blockForks, value)
+	}
+	return blockForks, timeForks
+}
+
+func tomlStringField(src string, section string, key string) (string, error) {
+	body := tomlSection(src, section)
+	if body == "" {
+		return "", fmt.Errorf("toml section %s not found", section)
+	}
+	re := regexp.MustCompile(`(?m)^\s*` + regexp.QuoteMeta(key) + `\s*=\s*"([^"]+)"\s*$`)
+	m := re.FindStringSubmatch(body)
+	if len(m) != 2 {
+		return "", fmt.Errorf("toml field %s.%s not found", section, key)
+	}
+	return m[1], nil
+}
+
+func tomlSection(src string, section string) string {
+	re := regexp.MustCompile(`(?m)^\s*\[` + regexp.QuoteMeta(section) + `\]\s*$`)
+	loc := re.FindStringIndex(src)
+	if loc == nil {
+		return ""
+	}
+	rest := src[loc[1]:]
+	next := regexp.MustCompile(`(?m)^\s*\[[^\]]+\]\s*$`).FindStringIndex(rest)
+	if next == nil {
+		return rest
+	}
+	return rest[:next[0]]
+}
+
+func findFieldStructLiteral(src string, name string) string {
+	start := strings.Index(src, name+":")
+	if start < 0 {
+		return ""
+	}
+	open := strings.Index(src[start:], "{")
+	if open < 0 {
+		return ""
+	}
+	open += start
+	depth := 0
+	for i := open; i < len(src); i++ {
+		switch src[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return src[open : i+1]
+			}
+		}
+	}
+	return ""
+}
+
+func discoverForkTuplesForChain(chain ChainConfig, allNodes map[string]NodeRecord) (forkTuple, []forkTuple, bool) {
+	filter, err := buildDiscoveryIdentityFilter(chain)
+	if err != nil {
+		return forkTuple{}, nil, false
+	}
+	candidates := make([]candidateNode, 0)
+	for nodeID, record := range allNodes {
+		n, err := enode.Parse(enode.ValidSchemes, record.Record)
+		if err != nil || !filter(n) {
+			continue
+		}
+		fh, fn := extractForkID(n)
+		if fh == "" || fn == "" {
+			continue
+		}
+		candidates = append(candidates, candidateNode{
+			nodeID:   nodeID,
+			record:   record,
+			node:     n,
+			forkHash: fh,
+			forkNext: fn,
+		})
+	}
+	if len(candidates) == 0 {
+		return forkTuple{}, nil, false
+	}
+	return dominantForkTuple(candidates), rankedForkTuples(candidates), true
+}
+
+func discoverForkTuplesFromBootnodes(chain ChainConfig) (forkTuple, []forkTuple, error) {
+	var records []string
+	var err error
+	switch chain.FilterType {
+	case "bootnodes_enrtree":
+		topN := chain.TopN
+		if topN <= 0 {
+			topN = 100
+		}
+		records, err = loadBootnodesENRTree(chain.SourceURL, topN)
+	case "bootnodes_go":
+		records, err = loadBootnodesGo(chain.SourceURL, chain.SourceKey)
+		for i := range records {
+			records[i] = normalizeGoBootnode(records[i])
+		}
+	case "bootnodes_yaml":
+		records, err = loadBootnodesYAML(chain.SourceURL)
+	default:
+		return forkTuple{}, nil, fmt.Errorf("unsupported bootnode filter type %q", chain.FilterType)
+	}
+	if err != nil {
+		return forkTuple{}, nil, err
+	}
+
+	candidates := make([]candidateNode, 0, len(records))
+	for _, record := range records {
+		n, err := enode.Parse(enode.ValidSchemes, record)
+		if err != nil {
+			continue
+		}
+		fh, fn := extractForkID(n)
+		if fh == "" || fn == "" {
+			continue
+		}
+		candidates = append(candidates, candidateNode{
+			record:   NodeRecord{Record: record, Score: 1},
+			node:     n,
+			forkHash: fh,
+			forkNext: fn,
+		})
+	}
+	if len(candidates) == 0 {
+		return forkTuple{}, nil, nil
+	}
+	return dominantForkTuple(candidates), rankedForkTuples(candidates), nil
+}
+
+func currentGethForkTuple(chain ChainConfig) (forkTuple, error) {
+	config, err := gethChainConfig(chain.Network)
+	if err != nil {
+		return forkTuple{}, err
+	}
+	genesisHash, err := decodeGenesisHash(chain.GenesisHex)
+	if err != nil {
+		return forkTuple{}, err
+	}
+
+	hash := crc32.ChecksumIEEE(genesisHash)
+	forks := gatherOrderedForks(config)
+	for _, fork := range forks {
+		if isForkPassedNow(fork) {
+			hash = crc32.Update(hash, crc32.IEEETable, uint64ToBytes(fork))
+			continue
+		}
+		return forkTuple{forkID: fmt.Sprintf("%08x", hash), forkNext: fmt.Sprintf("%x", fork)}, nil
+	}
+	return forkTuple{forkID: fmt.Sprintf("%08x", hash), forkNext: "0"}, nil
+}
+
+func gethForkTuples(chain ChainConfig) ([]forkTuple, error) {
+	config, err := gethChainConfig(chain.Network)
+	if err != nil {
+		return nil, err
+	}
+	genesisHash, err := decodeGenesisHash(chain.GenesisHex)
+	if err != nil {
+		return nil, err
+	}
+
+	hash := crc32.ChecksumIEEE(genesisHash)
+	forkPoints := gatherOrderedForks(config)
+	tuples := make([]forkTuple, 0, len(forkPoints)+1)
+	for _, fork := range forkPoints {
+		tuples = append(tuples, forkTuple{forkID: fmt.Sprintf("%08x", hash), forkNext: fmt.Sprintf("%x", fork)})
+		hash = crc32.Update(hash, crc32.IEEETable, uint64ToBytes(fork))
+	}
+	tuples = append(tuples, forkTuple{forkID: fmt.Sprintf("%08x", hash), forkNext: "0"})
+	return tuples, nil
+}
+
+func decodeGenesisHash(genesisHex string) ([]byte, error) {
+	decoded, err := hex.DecodeString(strings.TrimPrefix(genesisHex, "0x"))
+	if err != nil {
+		return nil, fmt.Errorf("decode genesis hash: %w", err)
+	}
+	if len(decoded) != 32 {
+		return nil, fmt.Errorf("invalid genesis hash length: %d", len(decoded))
+	}
+	return decoded, nil
+}
+
+func gatherOrderedForks(config *params.ChainConfig) []uint64 {
+	if config == nil {
+		return nil
+	}
+
+	kind := reflect.TypeOf(params.ChainConfig{})
+	conf := reflect.ValueOf(config).Elem()
+	blockKind := reflect.TypeOf(new(big.Int))
+	timeKind := reflect.TypeOf(new(uint64))
+
+	forksByBlock := make([]uint64, 0)
+	forksByTime := make([]uint64, 0)
+	for i := 0; i < kind.NumField(); i++ {
+		field := kind.Field(i)
+		isBlock := strings.HasSuffix(field.Name, "Block")
+		isTime := strings.HasSuffix(field.Name, "Time")
+		if !isBlock && !isTime {
+			continue
+		}
+
+		switch field.Type {
+		case blockKind:
+			rule := conf.Field(i).Interface().(*big.Int)
+			if rule == nil {
+				continue
+			}
+			value := rule.Uint64()
+			if value == 0 {
+				continue
+			}
+			forksByBlock = append(forksByBlock, value)
+		case timeKind:
+			rule := conf.Field(i).Interface().(*uint64)
+			if rule == nil {
+				continue
+			}
+			value := *rule
+			if value == 0 {
+				continue
+			}
+			forksByTime = append(forksByTime, value)
+		}
+	}
+
+	forksByBlock = dedupUint64s(forksByBlock)
+	forksByTime = dedupUint64s(forksByTime)
+	return append(forksByBlock, forksByTime...)
+}
+
 // ---------------------------------------------------------------------------
-// Filter construction
+// Discovery filters
 // ---------------------------------------------------------------------------
 
 // nodeFilter returns true if the node belongs to the target chain.
@@ -664,16 +1302,12 @@ type nodeFilter func(*enode.Node) bool
 // returned filter requires BOTH conditions to match simultaneously.  This
 // lets you narrow a chain-specific ENR field (e.g. "bsc") to a specific
 // fork version (e.g. testnet vs mainnet).
-func buildFilter(chain ChainConfig) (nodeFilter, error) {
+func buildFilter(chain ChainConfig, forkIDs ForkIDIndex) (nodeFilter, error) {
 	var filters []nodeFilter
 
 	switch chain.FilterType {
 	case "geth_network":
-		f, err := buildGethFilter(chain.Network)
-		if err != nil {
-			return nil, err
-		}
-		filters = append(filters, f)
+		return buildGethFilter(chain, forkIDs)
 	case "polygon_bor":
 		f, err := buildPolygonBorFilter(chain)
 		if err != nil {
@@ -689,10 +1323,15 @@ func buildFilter(chain ChainConfig) (nodeFilter, error) {
 			filters = append(filters, buildOPStackChainIDFilter(chain.ChainID))
 		}
 	case "fork_hash_list":
-		if len(chain.ForkHashes) == 0 {
+		tuples := forkTuplesForChain(chain, forkIDs)
+		if len(tuples) == 0 && len(chain.ForkHashes) == 0 {
 			return nil, fmt.Errorf("fork_hash_list filter requires forkHashes; run -discover to find them")
 		}
-		filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
+		if len(tuples) > 0 {
+			filters = append(filters, buildForkTupleListFilter(tuples))
+		} else {
+			filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
+		}
 	case "bootnodes_yaml":
 		return nil, fmt.Errorf("bootnodes_yaml is handled before filter construction")
 	case "bootnodes_go":
@@ -710,7 +1349,9 @@ func buildFilter(chain ChainConfig) (nodeFilter, error) {
 			filters = append(filters, buildOPStackChainIDFilter(chain.ChainID))
 		}
 	}
-	if chain.FilterType != "fork_hash_list" && len(chain.ForkHashes) > 0 {
+	if tuple, ok := currentForkTupleForChain(chain, forkIDs); ok && chain.FilterType != "geth_network" {
+		filters = append(filters, buildForkTupleListFilter([]forkTuple{tuple}))
+	} else if chain.FilterType != "fork_hash_list" && len(chain.ForkHashes) > 0 {
 		filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
 	}
 
@@ -727,32 +1368,20 @@ func buildFilter(chain ChainConfig) (nodeFilter, error) {
 	}, nil
 }
 
-// buildGethFilter uses go-ethereum's forkid.NewStaticFilter evaluated at genesis
-// time to accept any node that is on the same chain (same genesis hash) regardless
-// of which fork level they are currently at.
-func buildGethFilter(network string) (nodeFilter, error) {
-	var filter forkid.Filter
-	switch network {
-	case "mainnet":
-		filter = forkid.NewStaticFilter(params.MainnetChainConfig, core.DefaultGenesisBlock().ToBlock())
-	case "sepolia":
-		filter = forkid.NewStaticFilter(params.SepoliaChainConfig, core.DefaultSepoliaGenesisBlock().ToBlock())
-	case "holesky":
-		filter = forkid.NewStaticFilter(params.HoleskyChainConfig, core.DefaultHoleskyGenesisBlock().ToBlock())
-	case "hoodi":
-		filter = forkid.NewStaticFilter(params.HoodiChainConfig, core.DefaultHoodiGenesisBlock().ToBlock())
-	default:
-		return nil, fmt.Errorf("unknown geth network %q", network)
+// buildGethFilter keeps Ethereum-family nodes on the requested network by using
+// go-ethereum's authoritative chain config and forkid computation derived from
+// the configured genesis/header data, avoiding hardcoded live fork hashes.
+func buildGethFilter(chain ChainConfig, forkIDs ForkIDIndex) (nodeFilter, error) {
+	want, ok := currentForkTupleForChain(chain, forkIDs)
+	if !ok {
+		return nil, fmt.Errorf("missing current fork tuple for %s in fork_ids.json", chain.Name)
 	}
 	return func(n *enode.Node) bool {
-		var eth struct {
-			ForkID forkid.ID
-			Tail   []rlp.RawValue `rlp:"tail"`
-		}
-		if n.Load(enr.WithEntry("eth", &eth)) != nil {
+		fh, fn := extractForkID(n)
+		if fh == "" || fn == "" {
 			return false
 		}
-		return filter(eth.ForkID) == nil
+		return fh == want.forkID && fn == want.forkNext
 	}, nil
 }
 
@@ -799,15 +1428,60 @@ func buildOPStackChainIDFilter(chainID int) nodeFilter {
 	}
 }
 
+func buildDiscoveryIdentityFilter(chain ChainConfig) (nodeFilter, error) {
+	var filters []nodeFilter
+	if chain.EnrField != "" {
+		filters = append(filters, buildEnrFieldFilter(chain.EnrField))
+		if chain.EnrField == "opstack" {
+			filters = append(filters, buildOPStackChainIDFilter(chain.ChainID))
+		}
+	}
+	if len(chain.ForkHashes) > 0 {
+		filters = append(filters, buildForkHashListFilter(chain.ForkHashes))
+	}
+	if len(filters) == 0 {
+		return nil, fmt.Errorf("chain %s has no discovery identity filter", chain.Name)
+	}
+	return combineFilters(filters), nil
+}
+
 // buildForkHashListFilter accepts nodes whose fork hash is in the provided list.
 func buildForkHashListFilter(hashes []string) nodeFilter {
 	allowed := make(map[string]bool, len(hashes))
 	for _, h := range hashes {
-		allowed[h] = true
+		allowed[strings.TrimPrefix(h, "0x")] = true
 	}
 	return func(n *enode.Node) bool {
 		fh, _ := extractForkID(n)
 		return fh != "" && allowed[fh]
+	}
+}
+
+func buildForkTupleListFilter(tuples []forkTuple) nodeFilter {
+	allowed := make(map[forkTuple]bool, len(tuples))
+	for _, tuple := range tuples {
+		allowed[forkTuple{
+			forkID:   strings.TrimPrefix(tuple.forkID, "0x"),
+			forkNext: strings.TrimPrefix(tuple.forkNext, "0x"),
+		}] = true
+	}
+	return func(n *enode.Node) bool {
+		fh, fn := extractForkID(n)
+		return fh != "" && fn != "" && allowed[forkTuple{forkID: fh, forkNext: fn}]
+	}
+}
+
+func combineFilters(filters []nodeFilter) nodeFilter {
+	if len(filters) == 1 {
+		return filters[0]
+	}
+	return func(n *enode.Node) bool {
+		for _, f := range filters {
+			if !f(n) {
+				return false
+			}
+		}
+		return true
 	}
 }
 
@@ -835,35 +1509,61 @@ func extractForkIDFromENRKey(n *enode.Node, key string) (hashHex string, next st
 
 // dominantForkTuple returns the fork tuple with the highest aggregate node score.
 func dominantForkTuple(candidates []candidateNode) forkTuple {
-	type stats struct {
-		count      int
-		totalScore int
+	selectBest := func(items []candidateNode) forkTuple {
+		counts := make(map[forkTuple]int)
+		best := forkTuple{}
+		bestCount := 0
+		for _, c := range items {
+			if c.forkHash == "" || c.forkNext == "" {
+				continue
+			}
+			key := forkTuple{forkID: c.forkHash, forkNext: c.forkNext}
+			counts[key]++
+			if counts[key] > bestCount {
+				best = key
+				bestCount = counts[key]
+			}
+		}
+		return best
 	}
-	tally := make(map[forkTuple]*stats)
+
+	currentCandidates := make([]candidateNode, 0, len(candidates))
+	for _, c := range candidates {
+		if c.forkNext == "0" {
+			currentCandidates = append(currentCandidates, c)
+		}
+	}
+	if len(currentCandidates) > 0 {
+		if best := selectBest(currentCandidates); best.forkID != "" {
+			return best
+		}
+	}
+	return selectBest(candidates)
+}
+
+func rankedForkTuples(candidates []candidateNode) []forkTuple {
+	counts := make(map[forkTuple]int)
 	for _, c := range candidates {
 		if c.forkHash == "" || c.forkNext == "" {
 			continue
 		}
-		key := forkTuple{forkID: c.forkHash, forkNext: c.forkNext}
-		s := tally[key]
-		if s == nil {
-			s = &stats{}
-			tally[key] = s
-		}
-		s.count++
-		s.totalScore += c.record.Score
+		counts[forkTuple{forkID: c.forkHash, forkNext: c.forkNext}]++
 	}
-	best := forkTuple{}
-	bestScore := -1
-	bestCount := 0
-	for fork, s := range tally {
-		if s.totalScore > bestScore || (s.totalScore == bestScore && s.count > bestCount) {
-			best = fork
-			bestScore = s.totalScore
-			bestCount = s.count
-		}
+
+	tuples := make([]forkTuple, 0, len(counts))
+	for tuple := range counts {
+		tuples = append(tuples, tuple)
 	}
-	return best
+	sort.Slice(tuples, func(i, j int) bool {
+		if counts[tuples[i]] != counts[tuples[j]] {
+			return counts[tuples[i]] > counts[tuples[j]]
+		}
+		if tuples[i].forkID != tuples[j].forkID {
+			return tuples[i].forkID < tuples[j].forkID
+		}
+		return tuples[i].forkNext < tuples[j].forkNext
+	})
+	return tuples
 }
 
 // ---------------------------------------------------------------------------
@@ -985,6 +1685,45 @@ func loadRemoteForkConfig(url string) (string, string, error) {
 	currentForkVersion = strings.TrimPrefix(currentForkVersion, "0x")
 	nextForkVersion = strings.TrimPrefix(nextForkVersion, "0x")
 	return currentForkVersion, nextForkVersion, nil
+}
+
+func loadCurrentBlockNumber(rpcURL string) (uint64, error) {
+	if rpcURL == "" {
+		return 0, fmt.Errorf("missing rpcUrl")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, rpcURL, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}`))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return 0, fmt.Errorf("http status %d", resp.StatusCode)
+	}
+
+	var payload struct {
+		Result string `json:"result"`
+		Error  struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return 0, err
+	}
+	if payload.Error.Message != "" {
+		return 0, fmt.Errorf("rpc error %d: %s", payload.Error.Code, payload.Error.Message)
+	}
+	if payload.Result == "" {
+		return 0, fmt.Errorf("missing eth_blockNumber result")
+	}
+	return strconv.ParseUint(strings.TrimPrefix(payload.Result, "0x"), 16, 64)
 }
 
 func computeTimeBasedForkID(cfg LocalForkConfig) (string, string, error) {
@@ -1273,4 +2012,31 @@ func boolField(block string, field string) bool {
 	re := regexp.MustCompile(field + `:\s*(true|false)`)
 	m := re.FindStringSubmatch(block)
 	return len(m) == 2 && m[1] == "true"
+}
+
+func isForkPassedNow(fork uint64) bool {
+	return isForkPassedAt(fork, uint64(time.Now().Unix()))
+}
+
+func isForkPassedAt(fork uint64, timestamp uint64) bool {
+	const timestampThreshold = 1438269973
+	if fork > timestampThreshold {
+		return fork <= timestamp
+	}
+	return true
+}
+
+func gethChainConfig(network string) (*params.ChainConfig, error) {
+	switch network {
+	case "mainnet":
+		return params.MainnetChainConfig, nil
+	case "sepolia":
+		return params.SepoliaChainConfig, nil
+	case "holesky":
+		return params.HoleskyChainConfig, nil
+	case "hoodi":
+		return params.HoodiChainConfig, nil
+	default:
+		return nil, fmt.Errorf("unknown geth network %q", network)
+	}
 }
