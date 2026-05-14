@@ -1,0 +1,60 @@
+name: Update Fork IDs
+
+on:
+  schedule:
+    # Refresh daily so time-based fork transitions are picked up even when
+    # discv4-dns-lists/all.json has not changed.
+    - cron: '17 2 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - 'chains_config.json'
+      - 'config/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'app.go'
+      - 'main.go'
+      - 'types.go'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  ALL_JSON_URL: "https://raw.githubusercontent.com/ethereum/discv4-dns-lists/master/all.json"
+
+jobs:
+  update-fork-ids:
+    name: Generate fork_ids.json
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download all.json
+        run: curl -fsSL "$ALL_JSON_URL" -o /tmp/all.json
+
+      - name: Build filter tool
+        run: go build -o filter_nodes .
+
+      - name: Generate fork_ids.json
+        run: ./filter_nodes -config chains_config.json -input /tmp/all.json -fork-ids-only
+
+      - name: Commit and push updated fork IDs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/fork_ids.json
+          if git diff --cached --quiet; then
+            echo "No fork ID changes to commit"
+          else
+            git commit -m "chore: update fork IDs [skip ci]"
+            git push
+          fi
