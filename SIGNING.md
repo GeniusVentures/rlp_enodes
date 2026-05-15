@@ -49,6 +49,10 @@ The file will look like:
     "genesisHex": "f712aa9241cc24369b143cf6dce85f0902a9731e70d66818a3a5845b296c73dd",
     "forkId": "...",
     "forkNext": "...",
+    "upcomingFork": {
+      "at": "...",
+      "nodes": []
+    },
     "nodes": [
       ...
     ]
@@ -150,4 +154,3 @@ To ensure signatures are reproducible and verifiable:
 **Binary won't compile**
 - Ensure you have Go 1.18+ (ecdsa.Sign requires it)
 - Run `go mod tidy` to fetch dependencies
-

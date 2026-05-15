@@ -9,10 +9,12 @@ for use with your discv4 peer-discovery library.
 
 ## Output structure
 
-Each chain produces a single file directly in `output/`:
+The generator writes three kinds of JSON artifacts:
 
 ```
 output/
+  fork_ids.json
+  chain_enodes.json
   ethereum-mainnet.json
   ethereum-sepolia.json
   ethereum-holesky.json
@@ -24,10 +26,56 @@ output/
   base-mainnet.json
   base-sepolia.json
   gnosis-chain.json
-  .state          ← SHA-256 of last processed all.json (for change detection)
 ```
 
-Each `{chain}.json` is an object containing chain metadata plus nodes sorted by
+### `output/fork_ids.json`
+
+`fork_ids.json` is the fork metadata source of truth.  Each top-level key is a
+configured chain name.  Fork IDs are EIP-2124 tuples: `forkId` is the CRC32 fork
+hash and `forkNext` is the next fork block/timestamp encoded as lowercase hex,
+or `"0"` when no future fork is configured.
+
+```json
+{
+  "ethereum-mainnet": {
+    "chainId": 1,
+    "genesisHex": "d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
+    "current": {
+      "forkId": "07c9462e",
+      "forkNext": "0"
+    },
+    "upcoming": {
+      "at": "695db057",
+      "forkId": "12345678",
+      "forkNext": "0"
+    },
+    "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
+    "generatedAt": "2026-05-15T00:00:00Z",
+    "forks": [
+      { "forkId": "fc64ec04", "forkNext": "118c30" },
+      { "forkId": "07c9462e", "forkNext": "0" }
+    ]
+  }
+}
+```
+
+Fields:
+
+| Field | Description |
+|-------|-------------|
+| `chainId` | EVM chain ID. |
+| `genesisHex` | 32-byte genesis hash used as the fork ID CRC32 seed. |
+| `current` | Current fork tuple used for node filtering and output metadata. |
+| `upcoming` | Optional scheduled next fork metadata. Present when `current.forkNext != "0"`. |
+| `upcoming.at` | The scheduled fork block/timestamp from `current.forkNext`. |
+| `upcoming.forkId` / `upcoming.forkNext` | Optional post-fork tuple when it can be derived from the known schedule. |
+| `source` | GitHub/config source used to derive the fork schedule. |
+| `generatedAt` | UTC generation timestamp. |
+| `forks` | Known fork tuple progression from the source, ordered by activation. |
+
+### Per-chain `{chain}.json`
+
+Each chain also produces a file containing chain metadata plus nodes sorted by
 `score` (descending) then `lastResponse` (most recent first), capped at `topN`
 (default 100):
 
@@ -35,17 +83,25 @@ Each `{chain}.json` is an object containing chain metadata plus nodes sorted by
 {
   "networkId": 1,
   "genesisHex": "d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3",
-  "forkId":       "4d518ce1",
-  "forkNext":     "0",
+  "forkId": "07c9462e",
+  "forkNext": "0",
+  "upcomingFork": {
+    "at": "695db057",
+    "forkId": "12345678",
+    "forkNext": "0",
+    "nodes": []
+  },
   "nodes": [
     {
-      "enr":          "enr:-...",
-      "enode":        "enode://<128-hex-pubkey>@162.55.86.114:30311",
-      "pubkey":       "<128-hex-secp256k1-pubkey>",
-      "score":        3371,
+      "enr": "enr:-...",
+      "enode": "enode://<128-hex-pubkey>@162.55.86.114:30311",
+      "pubkey": "<128-hex-secp256k1-pubkey>",
+      "score": 3371,
       "lastResponse": "2026-03-14T20:54:48Z",
-      "ip":           "162.55.86.114",
-      "port":         30311
+      "forkId": "07c9462e",
+      "forkNext": "0",
+      "ip": "162.55.86.114",
+      "port": 30311
     }
   ]
 }
@@ -54,6 +110,44 @@ Each `{chain}.json` is an object containing chain metadata plus nodes sorted by
 `pubkey`, `enode`, `ip`, and `port` are derived from the decoded ENR itself.
 `pubkey` is the 64-byte uncompressed secp256k1 public key (hex, without `0x04`).
 `port` prefers the ENR TCP port and falls back to UDP only when TCP is absent.
+
+`forkId` and `forkNext` at the chain level mirror `fork_ids.json.current`.
+`upcomingFork` is omitted when no future fork is configured.  When present,
+`upcomingFork.nodes` contains peers already advertising the post-fork tuple.
+If the schedule only identifies the activation point, `upcomingFork.at` is set
+and `nodes` may be empty.
+
+### `output/chain_enodes.json`
+
+`chain_enodes.json` is the combined output consumed by clients.  It maps each
+configured chain name to the same schema as the per-chain `{chain}.json` files.
+When signing is enabled, it also includes top-level `signature` and
+`signerAddress` fields:
+
+```json
+{
+  "ethereum-mainnet": {
+    "networkId": 1,
+    "genesisHex": "...",
+    "forkId": "07c9462e",
+    "forkNext": "0",
+    "nodes": []
+  },
+  "gnosis-chain": {
+    "networkId": 100,
+    "genesisHex": "...",
+    "forkId": "05000064",
+    "forkNext": "06000064",
+    "upcomingFork": {
+      "at": "06000064",
+      "nodes": []
+    },
+    "nodes": []
+  },
+  "signature": "0x<65-byte-secp256k1-signature>",
+  "signerAddress": "0x<ethereum-address>"
+}
+```
 
 ## Automation
 
@@ -85,11 +179,28 @@ go build -o filter_nodes .
 
 | Strategy          | Description |
 |-------------------|-------------|
-| `geth_network`    | Uses `go-ethereum`'s `forkid.NewStaticFilter` to accept **any** node on the same genesis chain regardless of fork level.  Supported networks: `mainnet`, `sepolia`, `holesky`, `hoodi`. |
+| `geth_network`    | Filters Ethereum-family ENRs against the current tuple from `fork_ids.json`. Supported networks: `mainnet`, `sepolia`, `holesky`, `hoodi`. |
 | `enr_field`       | Accepts nodes that carry a specific ENR key (e.g. `bsc` for BNB Smart Chain). |
 | `fork_hash_list`  | Accepts nodes whose `eth` fork hash is in the configured `forkHashes` list. |
 | `bootnodes_yaml`  | Loads a chain from an external YAML list of ENR bootnodes via `sourceUrl`. |
 | `bootnodes_go`    | Loads a chain from a named `[]string` bootnode slice in an external Go source file via `sourceUrl` + `sourceKey`. |
+
+## Fork ID sources
+
+Fork IDs are generated before node filtering and written to `output/fork_ids.json`.
+The normal run then reloads that file and uses it for filtering and output
+metadata.  Current source providers:
+
+| Provider | Chains | Source |
+|----------|--------|--------|
+| `ethereum_geth` | Ethereum mainnet/testnets | `ethereum/go-ethereum` `params/config.go` from the configured `forkSourceRef` (currently `master`). |
+| `bsc` | BNB Smart Chain mainnet/testnet | `bnb-chain/bsc` `params/config.go` from a pinned release tag. |
+| `polygon_bor` | Polygon PoS / Amoy | `0xPolygon/bor` `params/config.go`, including Bor-specific fork blocks. |
+| `op_stack_superchain` | Base mainnet/sepolia | `ethereum-optimism/superchain-registry` superchain hardfork config. |
+
+Providers compute the EIP-2124 tuple from genesis hash plus already-passed fork
+blocks/timestamps.  For block forks, the generator reads `eth_blockNumber` from
+the configured `rpcUrl`; for timestamp forks it uses the current UTC time.
 
 ### Compound AND filter
 
@@ -168,4 +279,3 @@ Use ECDSA (secp256k1, Ethereum-compatible) signing with a private key.
    - `signerAddress`: Ethereum address of the signer
 
 For full setup and verification instructions, see [**SIGNING.md**](SIGNING.md).
-
