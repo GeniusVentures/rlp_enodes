@@ -169,10 +169,10 @@ go build -o filter_nodes .
 ./filter_nodes -input /path/to/all.json
 
 # Discovery mode: print ranked fork-hash summary to identify unknown chains
-./filter_nodes -discover
+./filter_nodes -discover -v
 
 # Combine: discovery on a local file
-./filter_nodes -input /path/to/all.json -discover
+./filter_nodes -input /path/to/all.json -discover -v
 ```
 
 ## Supported filter strategies

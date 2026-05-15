@@ -11,7 +11,8 @@ import (
 func main() {
 	configPath := flag.String("config", "chains_config.json", "path to chains_config.json")
 	inputFile := flag.String("input", "", "local all.json file to use instead of downloading")
-	discover := flag.Bool("discover", false, "print fork-hash discovery summary and exit")
+	discover := flag.Bool("discover", false, "run fork-hash discovery and exit; use -v to print the summary")
+	verbose := flag.Bool("v", false, "enable verbose output")
 	forkIDsOnly := flag.Bool("fork-ids-only", false, "generate output/fork_ids.json and exit")
 	baseAll := flag.Bool("base-all", false, "crawl Base bootnodes and write output/base-all.json")
 	baseNetwork := flag.String("base-network", "mainnet", "Base network for -base-all: mainnet or sepolia")
@@ -56,7 +57,11 @@ func main() {
 	log.Printf("Loaded %d nodes from all.json (SHA256=%s...)", len(allNodes), shortSHA(raw))
 
 	if *discover {
-		printDiscovery(allNodes)
+		if *verbose {
+			printDiscovery(allNodes)
+		} else {
+			log.Printf("Discovery summary suppressed; rerun with -discover -v to print it")
+		}
 		return
 	}
 
