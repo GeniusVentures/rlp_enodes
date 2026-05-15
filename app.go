@@ -417,49 +417,56 @@ func printDiscovery(allNodes map[string]NodeRecord) {
 // Core pipeline
 // ---------------------------------------------------------------------------
 
-func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, forkTuple, error) {
+func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int, forkIDs ForkIDIndex) (ChainOutput, error) {
 	if chain.FilterType == "bootnodes_yaml" {
-		nodes, err := processBootnodesYAMLChain(chain, outputDir, topN, forkIDs)
-		return nodes, forkTuple{}, err
+		return processBootnodesYAMLChain(chain, outputDir, topN, forkIDs)
 	}
 	if chain.FilterType == "bootnodes_go" {
-		nodes, err := processBootnodesGOChain(chain, outputDir, topN, forkIDs)
-		return nodes, forkTuple{}, err
+		return processBootnodesGOChain(chain, outputDir, topN, forkIDs)
 	}
 	if chain.FilterType == "bootnodes_enrtree" {
-		nodes, err := processBootnodesENRTreeChain(chain, outputDir, topN, forkIDs)
-		return nodes, forkTuple{}, err
+		return processBootnodesENRTreeChain(chain, outputDir, topN, forkIDs)
 	}
 
 	filter, err := buildFilter(chain, forkIDs)
 	if err != nil {
-		return nil, forkTuple{}, fmt.Errorf("build filter: %w", err)
+		return ChainOutput{}, fmt.Errorf("build filter: %w", err)
 	}
 
 	// Step 1: collect matching candidates.
 	var candidates []candidateNode
+	var upcomingCandidates []candidateNode
+	upcomingTuple, hasUpcoming := upcomingForkTupleForChain(chain, forkIDs)
+	upcomingFilter, hasUpcomingFilter, err := buildUpcomingForkCandidateFilter(chain, forkIDs)
+	if err != nil {
+		return ChainOutput{}, fmt.Errorf("build upcoming fork filter: %w", err)
+	}
 	for nodeID, record := range allNodes {
 		n, err := enode.Parse(enode.ValidSchemes, record.Record)
 		if err != nil {
 			continue
 		}
-		if !filter(n) {
-			continue
-		}
 		fh, fn := extractForkID(n)
-		if chain.FilterType == "geth_network" && fh == "" {
-			continue
-		}
-		candidates = append(candidates, candidateNode{
+		candidate := candidateNode{
 			nodeID:   nodeID,
 			record:   record,
 			node:     n,
 			forkHash: fh,
 			forkNext: fn,
-		})
+		}
+		if filter(n) {
+			if chain.FilterType == "geth_network" && fh == "" {
+				continue
+			}
+			candidates = append(candidates, candidate)
+		}
+		if hasUpcoming && hasUpcomingFilter && upcomingFilter(n) && fh == upcomingTuple.forkID && fn == upcomingTuple.forkNext {
+			upcomingCandidates = append(upcomingCandidates, candidate)
+		}
 	}
 
 	var dominant forkTuple
+	var output []OutputNode
 	if len(candidates) == 0 {
 		log.Printf("[%s] No matching nodes found", chain.Name)
 	} else {
@@ -493,46 +500,38 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 		}
 
 		// Step 6: marshal to OutputNode slice.
-		output := make([]OutputNode, 0, len(filtered))
+		output = make([]OutputNode, 0, len(filtered))
 		for _, c := range filtered {
 			output = append(output, toOutputNode(c))
 		}
-
-		// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
-		writeFork := dominant
-		if forkIDTuple, ok := currentForkTupleForChain(chain, forkIDs); ok {
-			writeFork = forkIDTuple
-		}
-		if err := writeChainOutput(chain, output, outputDir, writeFork.forkID, writeFork.forkNext); err != nil {
-			return nil, forkTuple{}, fmt.Errorf("write chain output: %w", err)
-		}
-		return output, writeFork, nil
 	}
 
-	output := []OutputNode{}
-
-	// Step 7: write JSON atomically directly into outputDir/{chain.Name}.json.
+	writeFork := dominant
 	if forkIDTuple, ok := currentForkTupleForChain(chain, forkIDs); ok {
-		dominant = forkIDTuple
+		writeFork = forkIDTuple
+	} else if writeFork.forkID == "" {
+		writeFork = chainForkTuple(output)
 	}
-	if err := writeChainOutput(chain, output, outputDir, dominant.forkID, dominant.forkNext); err != nil {
-		return nil, forkTuple{}, fmt.Errorf("write chain output: %w", err)
+	upcoming := buildUpcomingForkOutput(chain, forkIDs, upcomingCandidates, topN)
+	chainOutput := newChainOutput(chain, output, writeFork.forkID, writeFork.forkNext, upcoming)
+	if err := writeChainOutput(chain, chainOutput, outputDir); err != nil {
+		return ChainOutput{}, fmt.Errorf("write chain output: %w", err)
 	}
-	return output, dominant, nil
+	return chainOutput, nil
 }
 
-func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, error) {
+func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) (ChainOutput, error) {
 	bootnodes, err := loadBootnodesYAML(chain.SourceURL)
 	if err != nil {
-		return nil, fmt.Errorf("load bootnodes yaml: %w", err)
+		return ChainOutput{}, fmt.Errorf("load bootnodes yaml: %w", err)
 	}
 	return processBootnodeRecords(chain, bootnodes, outputDir, topN, forkIDs)
 }
 
-func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, error) {
+func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) (ChainOutput, error) {
 	bootnodes, err := loadBootnodesGo(chain.SourceURL, chain.SourceKey)
 	if err != nil {
-		return nil, fmt.Errorf("load bootnodes go: %w", err)
+		return ChainOutput{}, fmt.Errorf("load bootnodes go: %w", err)
 	}
 	for i := range bootnodes {
 		bootnodes[i] = normalizeGoBootnode(bootnodes[i])
@@ -540,17 +539,19 @@ func processBootnodesGOChain(chain ChainConfig, outputDir string, topN int, fork
 	return processBootnodeRecords(chain, bootnodes, outputDir, topN, forkIDs)
 }
 
-func processBootnodesENRTreeChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, error) {
+func processBootnodesENRTreeChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) (ChainOutput, error) {
 	bootnodes, err := loadBootnodesENRTree(chain.SourceURL, topN)
 	if err != nil {
-		return nil, fmt.Errorf("load bootnodes enrtree: %w", err)
+		return ChainOutput{}, fmt.Errorf("load bootnodes enrtree: %w", err)
 	}
 	return processBootnodeRecords(chain, bootnodes, outputDir, topN, forkIDs)
 }
 
-func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir string, topN int, forkIDs ForkIDIndex) ([]OutputNode, error) {
+func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir string, topN int, forkIDs ForkIDIndex) (ChainOutput, error) {
 	output := make([]OutputNode, 0, len(bootnodes))
+	upcomingNodes := make([]OutputNode, 0)
 	wantFork, filterByFork := currentForkTupleForChain(chain, forkIDs)
+	upcomingTuple, hasUpcoming := upcomingForkTupleForChain(chain, forkIDs)
 	for _, record := range bootnodes {
 		n, err := enode.Parse(enode.ValidSchemes, record)
 		if err != nil {
@@ -567,6 +568,10 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 		if forkHash, forkNext := extractForkID(n); forkHash != "" {
 			out.ForkID = forkHash
 			out.ForkNext = forkNext
+			if hasUpcoming && forkHash == upcomingTuple.forkID && forkNext == upcomingTuple.forkNext {
+				upcomingNodes = append(upcomingNodes, out)
+				continue
+			}
 			if filterByFork && (forkHash != wantFork.forkID || forkNext != wantFork.forkNext) {
 				continue
 			}
@@ -596,11 +601,13 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 		fork = forkIDTuple
 	}
 
-	if err := writeChainOutput(chain, output, outputDir, fork.forkID, fork.forkNext); err != nil {
-		return nil, fmt.Errorf("write chain output: %w", err)
+	upcoming := buildUpcomingForkOutputFromNodes(chain, forkIDs, upcomingNodes, topN)
+	chainOutput := newChainOutput(chain, output, fork.forkID, fork.forkNext, upcoming)
+	if err := writeChainOutput(chain, chainOutput, outputDir); err != nil {
+		return ChainOutput{}, fmt.Errorf("write chain output: %w", err)
 	}
 	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), filepath.Join(outputDir, chain.Name+".json"))
-	return output, nil
+	return chainOutput, nil
 }
 
 // writeChainEnodes writes a combined chain_enodes.json file mapping each chain
@@ -758,11 +765,14 @@ func collectForkIDs(cfg *AppConfig, allNodes map[string]NodeRecord) ForkIDIndex 
 		if forkID == "" && forkNext == "" && len(forks) == 0 {
 			continue
 		}
+		current := ForkTupleOutput{ForkID: forkID, ForkNext: forkNext}
 		forkIDs[chain.Name] = ForkIDOutput{
 			ChainID:     chain.ChainID,
 			GenesisHex:  chain.GenesisHex,
 			ForkID:      forkID,
 			ForkNext:    forkNext,
+			Current:     current,
+			Upcoming:    upcomingForkOutputFromForks(forkTuple{forkID: forkID, forkNext: forkNext}, forks),
 			Source:      source,
 			GeneratedAt: generatedAt,
 			Forks:       forks,
@@ -771,12 +781,37 @@ func collectForkIDs(cfg *AppConfig, allNodes map[string]NodeRecord) ForkIDIndex 
 	return forkIDs
 }
 
+func upcomingForkOutputFromForks(current forkTuple, forks []ForkTupleOutput) *ForkUpcomingOutput {
+	if current.forkNext == "" || current.forkNext == "0" {
+		return nil
+	}
+	output := &ForkUpcomingOutput{At: current.forkNext}
+	for i, item := range forks {
+		tuple := forkTuple{
+			forkID:   strings.TrimPrefix(item.ForkID, "0x"),
+			forkNext: strings.TrimPrefix(item.ForkNext, "0x"),
+		}
+		if tuple == current && i+1 < len(forks) {
+			output.ForkID = strings.TrimPrefix(forks[i+1].ForkID, "0x")
+			output.ForkNext = strings.TrimPrefix(forks[i+1].ForkNext, "0x")
+			break
+		}
+	}
+	return output
+}
+
 func currentForkTupleForChain(chain ChainConfig, forkIDs ForkIDIndex) (forkTuple, bool) {
 	if forkIDs == nil {
 		return forkTuple{}, false
 	}
 	output, ok := forkIDs[chain.Name]
-	if !ok || output.ForkID == "" || output.ForkNext == "" {
+	if !ok {
+		return forkTuple{}, false
+	}
+	if output.Current.ForkID != "" || output.Current.ForkNext != "" {
+		return forkTuple{forkID: strings.TrimPrefix(output.Current.ForkID, "0x"), forkNext: strings.TrimPrefix(output.Current.ForkNext, "0x")}, true
+	}
+	if output.ForkID == "" || output.ForkNext == "" {
 		return forkTuple{}, false
 	}
 	return forkTuple{forkID: strings.TrimPrefix(output.ForkID, "0x"), forkNext: strings.TrimPrefix(output.ForkNext, "0x")}, true
@@ -813,6 +848,91 @@ func forkTuplesForChain(chain ChainConfig, forkIDs ForkIDIndex) []forkTuple {
 	return tuples
 }
 
+func upcomingForkTupleForChain(chain ChainConfig, forkIDs ForkIDIndex) (forkTuple, bool) {
+	output, ok := forkIDs[chain.Name]
+	if !ok || output.Upcoming == nil || output.Upcoming.ForkID == "" || output.Upcoming.ForkNext == "" {
+		return forkTuple{}, false
+	}
+	return forkTuple{
+		forkID:   strings.TrimPrefix(output.Upcoming.ForkID, "0x"),
+		forkNext: strings.TrimPrefix(output.Upcoming.ForkNext, "0x"),
+	}, true
+}
+
+func hasUpcomingForkForChain(chain ChainConfig, forkIDs ForkIDIndex) bool {
+	output, ok := forkIDs[chain.Name]
+	return ok && output.Upcoming != nil && output.Upcoming.At != ""
+}
+
+func upcomingForkAtForChain(chain ChainConfig, forkIDs ForkIDIndex) string {
+	output, ok := forkIDs[chain.Name]
+	if !ok || output.Upcoming == nil {
+		return ""
+	}
+	return output.Upcoming.At
+}
+
+func buildUpcomingForkCandidateFilter(chain ChainConfig, forkIDs ForkIDIndex) (nodeFilter, bool, error) {
+	upcoming, ok := upcomingForkTupleForChain(chain, forkIDs)
+	if !ok {
+		return nil, false, nil
+	}
+	tupleFilter := buildForkTupleListFilter([]forkTuple{upcoming})
+
+	if chain.FilterType == "geth_network" {
+		return tupleFilter, true, nil
+	}
+
+	identity, err := buildDiscoveryIdentityFilter(chain)
+	if err == nil {
+		return combineFilters([]nodeFilter{identity, tupleFilter}), true, nil
+	}
+	if len(chain.ForkHashes) > 0 || chain.EnrField != "" {
+		return nil, false, err
+	}
+	return tupleFilter, true, nil
+}
+
+func buildUpcomingForkOutput(chain ChainConfig, forkIDs ForkIDIndex, candidates []candidateNode, topN int) *UpcomingForkOutput {
+	nodes := make([]OutputNode, 0, len(candidates))
+	sort.Slice(candidates, func(i, j int) bool {
+		si, sj := candidates[i].record.Score, candidates[j].record.Score
+		if si != sj {
+			return si > sj
+		}
+		return candidates[i].record.LastResponse.After(candidates[j].record.LastResponse)
+	})
+	for _, candidate := range candidates {
+		nodes = append(nodes, toOutputNode(candidate))
+	}
+	return buildUpcomingForkOutputFromNodes(chain, forkIDs, nodes, topN)
+}
+
+func buildUpcomingForkOutputFromNodes(chain ChainConfig, forkIDs ForkIDIndex, nodes []OutputNode, topN int) *UpcomingForkOutput {
+	if !hasUpcomingForkForChain(chain, forkIDs) {
+		return nil
+	}
+	upcoming, hasUpcomingTuple := upcomingForkTupleForChain(chain, forkIDs)
+	sort.Slice(nodes, func(i, j int) bool {
+		if nodes[i].Score != nodes[j].Score {
+			return nodes[i].Score > nodes[j].Score
+		}
+		return nodes[i].LastResponse.After(nodes[j].LastResponse)
+	})
+	if topN > 0 && len(nodes) > topN {
+		nodes = nodes[:topN]
+	}
+	output := &UpcomingForkOutput{
+		At:    upcomingForkAtForChain(chain, forkIDs),
+		Nodes: nodes,
+	}
+	if hasUpcomingTuple {
+		output.ForkID = upcoming.forkID
+		output.ForkNext = upcoming.forkNext
+	}
+	return output
+}
+
 func forkTupleOutputs(tuples []forkTuple) []ForkTupleOutput {
 	output := make([]ForkTupleOutput, 0, len(tuples))
 	seen := make(map[forkTuple]bool)
@@ -828,6 +948,8 @@ func forkTupleOutputs(tuples []forkTuple) []ForkTupleOutput {
 
 func collectProviderForkIDs(chain ChainConfig) (forkTuple, []forkTuple, string, error) {
 	switch chain.ForkProvider {
+	case "ethereum_geth":
+		return collectEthereumGethForkIDs(chain)
 	case "bsc":
 		return collectBSCForkIDs(chain)
 	case "polygon_bor":
@@ -837,6 +959,50 @@ func collectProviderForkIDs(chain ChainConfig) (forkTuple, []forkTuple, string, 
 	default:
 		return forkTuple{}, nil, "", fmt.Errorf("unknown fork provider %q", chain.ForkProvider)
 	}
+}
+
+func collectEthereumGethForkIDs(chain ChainConfig) (forkTuple, []forkTuple, string, error) {
+	ref := chain.ForkSourceRef
+	if ref == "" {
+		return forkTuple{}, nil, "", fmt.Errorf("missing forkSourceRef")
+	}
+	baseURL := strings.TrimRight(chain.ForkSourceURL, "/")
+	if baseURL == "" {
+		baseURL = "https://raw.githubusercontent.com/ethereum/go-ethereum"
+	}
+	sourceURL := fmt.Sprintf("%s/%s/params/config.go", baseURL, ref)
+	raw, err := loadTextURL(sourceURL)
+	if err != nil {
+		return forkTuple{}, nil, "", err
+	}
+
+	configName := chain.ForkConfigName
+	genesisName := chain.ForkGenesisName
+	if configName == "" || genesisName == "" {
+		switch chain.Network {
+		case "mainnet":
+			configName = "MainnetChainConfig"
+			genesisName = "MainnetGenesisHash"
+		case "sepolia":
+			configName = "SepoliaChainConfig"
+			genesisName = "SepoliaGenesisHash"
+		case "holesky":
+			configName = "HoleskyChainConfig"
+			genesisName = "HoleskyGenesisHash"
+		case "hoodi":
+			configName = "HoodiChainConfig"
+			genesisName = "HoodiGenesisHash"
+		default:
+			return forkTuple{}, nil, "", fmt.Errorf("missing ethereum geth network/config names")
+		}
+	}
+
+	head, err := loadCurrentBlockNumber(chain.RPCURL)
+	if err != nil {
+		return forkTuple{}, nil, "", err
+	}
+	tuple, tuples, err := forkTuplesFromClientConfig(string(raw), configName, genesisName, head, time.Now())
+	return tuple, tuples, sourceURL, err
 }
 
 func collectBSCForkIDs(chain ChainConfig) (forkTuple, []forkTuple, string, error) {
@@ -1605,18 +1771,22 @@ func chainForkTuple(nodes []OutputNode) forkTuple {
 	return forkTuple{}
 }
 
+func newChainOutput(chain ChainConfig, nodes []OutputNode, forkID string, forkNext string, upcoming *UpcomingForkOutput) ChainOutput {
+	return ChainOutput{
+		NetworkID:    chain.ChainID,
+		GenesisHex:   chain.GenesisHex,
+		ForkID:       forkID,
+		ForkNext:     forkNext,
+		UpcomingFork: upcoming,
+		Nodes:        nodes,
+	}
+}
+
 // writeChainOutput writes a ChainOutput to outputDir/{chainName}.json.
-func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string, forkID string, forkNext string) error {
+func writeChainOutput(chain ChainConfig, output ChainOutput, outputDir string) error {
 	outPath := filepath.Join(outputDir, chain.Name+".json")
 	tmpPath := outPath + ".tmp"
-	chainOutput := ChainOutput{
-		NetworkID:  chain.ChainID,
-		GenesisHex: chain.GenesisHex,
-		ForkID:     forkID,
-		ForkNext:   forkNext,
-		Nodes:      nodes,
-	}
-	data, err := json.MarshalIndent(chainOutput, "", "  ")
+	data, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -1626,7 +1796,7 @@ func writeChainOutput(chain ChainConfig, nodes []OutputNode, outputDir string, f
 	if err := os.Rename(tmpPath, outPath); err != nil {
 		return fmt.Errorf("rename: %w", err)
 	}
-	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(nodes), outPath)
+	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output.Nodes), outPath)
 	return nil
 }
 

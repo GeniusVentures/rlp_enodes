@@ -97,27 +97,15 @@ func main() {
 		if topN <= 0 {
 			topN = defaultTopN
 		}
-		nodes, dominantFork, err := processChain(chain, allNodes, outDir, topN, forkIDs)
+		output, err := processChain(chain, allNodes, outDir, topN, forkIDs)
 		if err != nil {
 			log.Printf("ERROR processing chain %s: %v", chain.Name, err)
 			continue
 		}
-		if nodes == nil {
-			nodes = []OutputNode{}
+		if output.Nodes == nil {
+			output.Nodes = []OutputNode{}
 		}
-		fork := dominantFork
-		if forkIDTuple, ok := currentForkTupleForChain(chain, forkIDs); ok {
-			fork = forkIDTuple
-		} else if fork.forkID == "" {
-			fork = chainForkTuple(nodes)
-		}
-		chainEnodes[chain.Name] = ChainOutput{
-			NetworkID:  chain.ChainID,
-			GenesisHex: chain.GenesisHex,
-			ForkID:     fork.forkID,
-			ForkNext:   fork.forkNext,
-			Nodes:      nodes,
-		}
+		chainEnodes[chain.Name] = output
 	}
 
 	if err := writeChainEnodes(outDir, chainEnodes); err != nil {

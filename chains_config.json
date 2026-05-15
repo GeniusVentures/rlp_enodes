@@ -10,6 +10,12 @@
       "description": "Ethereum Mainnet",
       "filterType": "geth_network",
       "network": "mainnet",
+      "rpcUrl": "https://ethereum-rpc.publicnode.com",
+      "forkProvider": "ethereum_geth",
+      "forkSourceUrl": "https://raw.githubusercontent.com/ethereum/go-ethereum",
+      "forkSourceRef": "master",
+      "forkConfigName": "MainnetChainConfig",
+      "forkGenesisName": "MainnetGenesisHash",
       "topN": 100
     },
     {
@@ -19,6 +25,12 @@
       "description": "Ethereum Sepolia Testnet",
       "filterType": "geth_network",
       "network": "sepolia",
+      "rpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
+      "forkProvider": "ethereum_geth",
+      "forkSourceUrl": "https://raw.githubusercontent.com/ethereum/go-ethereum",
+      "forkSourceRef": "master",
+      "forkConfigName": "SepoliaChainConfig",
+      "forkGenesisName": "SepoliaGenesisHash",
       "topN": 100
     },
     {
@@ -28,6 +40,12 @@
       "description": "Ethereum Holesky Testnet",
       "filterType": "geth_network",
       "network": "holesky",
+      "rpcUrl": "https://holesky.drpc.org",
+      "forkProvider": "ethereum_geth",
+      "forkSourceUrl": "https://raw.githubusercontent.com/ethereum/go-ethereum",
+      "forkSourceRef": "master",
+      "forkConfigName": "HoleskyChainConfig",
+      "forkGenesisName": "HoleskyGenesisHash",
       "topN": 100
     },
     {
@@ -37,6 +55,12 @@
       "description": "Ethereum Hoodi Testnet",
       "filterType": "geth_network",
       "network": "hoodi",
+      "rpcUrl": "https://ethereum-hoodi-rpc.publicnode.com",
+      "forkProvider": "ethereum_geth",
+      "forkSourceUrl": "https://raw.githubusercontent.com/ethereum/go-ethereum",
+      "forkSourceRef": "master",
+      "forkConfigName": "HoodiChainConfig",
+      "forkGenesisName": "HoodiGenesisHash",
       "topN": 100
     },
     {

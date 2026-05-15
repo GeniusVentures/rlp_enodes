@@ -77,13 +77,21 @@ type OutputNode struct {
 
 // ChainOutput is the output structure for a chain's JSON file.
 type ChainOutput struct {
-	NetworkID     int          `json:"networkId"`
-	GenesisHex    string       `json:"genesisHex"`
-	ForkID        string       `json:"forkId"`
-	ForkNext      string       `json:"forkNext"`
-	Nodes         []OutputNode `json:"nodes"`
-	Signature     string       `json:"signature,omitempty"`
-	SignerAddress string       `json:"signerAddress,omitempty"`
+	NetworkID     int                 `json:"networkId"`
+	GenesisHex    string              `json:"genesisHex"`
+	ForkID        string              `json:"forkId"`
+	ForkNext      string              `json:"forkNext"`
+	UpcomingFork  *UpcomingForkOutput `json:"upcomingFork,omitempty"`
+	Nodes         []OutputNode        `json:"nodes"`
+	Signature     string              `json:"signature,omitempty"`
+	SignerAddress string              `json:"signerAddress,omitempty"`
+}
+
+type UpcomingForkOutput struct {
+	ForkID   string       `json:"forkId,omitempty"`
+	ForkNext string       `json:"forkNext,omitempty"`
+	At       string       `json:"at"`
+	Nodes    []OutputNode `json:"nodes"`
 }
 
 type candidateNode struct {
@@ -121,14 +129,22 @@ type ForkTupleOutput struct {
 	ForkNext string `json:"forkNext"`
 }
 
+type ForkUpcomingOutput struct {
+	At       string `json:"at"`
+	ForkID   string `json:"forkId,omitempty"`
+	ForkNext string `json:"forkNext,omitempty"`
+}
+
 type ForkIDOutput struct {
-	ChainID     int               `json:"chainId"`
-	GenesisHex  string            `json:"genesisHex"`
-	ForkID      string            `json:"forkId"`
-	ForkNext    string            `json:"forkNext"`
-	Source      string            `json:"source"`
-	GeneratedAt time.Time         `json:"generatedAt"`
-	Forks       []ForkTupleOutput `json:"forks,omitempty"`
+	ChainID     int                 `json:"chainId"`
+	GenesisHex  string              `json:"genesisHex"`
+	ForkID      string              `json:"-"`
+	ForkNext    string              `json:"-"`
+	Current     ForkTupleOutput     `json:"current"`
+	Upcoming    *ForkUpcomingOutput `json:"upcoming,omitempty"`
+	Source      string              `json:"source"`
+	GeneratedAt time.Time           `json:"generatedAt"`
+	Forks       []ForkTupleOutput   `json:"forks,omitempty"`
 }
 
 type ForkIDIndex map[string]ForkIDOutput
