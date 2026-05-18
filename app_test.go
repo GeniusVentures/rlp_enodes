@@ -1,6 +1,33 @@
 package main
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
+
+func TestForkTuplesFromClientConfigIgnoresNestedBorForks(t *testing.T) {
+	src := `
+var TestGenesisHash = common.HexToHash("0000000000000000000000000000000000000000000000000000000000000001")
+var TestChainConfig = &ChainConfig{
+	ChainID:        big.NewInt(137),
+	HomesteadBlock: big.NewInt(10),
+	Bor: &bor.BorConfig{
+		JaipurBlock: big.NewInt(30),
+	},
+}
+`
+
+	current, tuples, err := forkTuplesFromClientConfig(src, "TestChainConfig", "TestGenesisHash", 20, time.Unix(0, 0))
+	if err != nil {
+		t.Fatalf("fork tuples from client config: %v", err)
+	}
+	if current.forkNext != "0" {
+		t.Fatalf("current forkNext = %s, want 0; nested Bor fork was included", current.forkNext)
+	}
+	if len(tuples) != 2 {
+		t.Fatalf("tuple count = %d, want 2; nested Bor fork was included", len(tuples))
+	}
+}
 
 func TestCurrentGethForkTuple(t *testing.T) {
 	cfg, err := loadConfig("chains_config.json")

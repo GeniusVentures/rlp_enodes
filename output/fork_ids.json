@@ -6,8 +6,8 @@
       "forkId": "62cf6b79",
       "forkNext": "0"
     },
-    "source": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry/main/superchain/configs/mainnet/superchain.toml",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "source": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry/master/superchain/configs/mainnet/superchain.toml",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "67da0260",
@@ -54,8 +54,8 @@
       "forkId": "d85c2524",
       "forkNext": "0"
     },
-    "source": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry/main/superchain/configs/sepolia/superchain.toml",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "source": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry/master/superchain/configs/sepolia/superchain.toml",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "b959b9f7",
@@ -106,8 +106,8 @@
       "forkId": "808e16a3",
       "forkNext": "0"
     },
-    "source": "https://raw.githubusercontent.com/bnb-chain/bsc/v1.7.3/params/config.go",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "source": "https://raw.githubusercontent.com/bnb-chain/bsc/master/params/config.go",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "3f2e9ae4",
@@ -206,8 +206,8 @@
       "forkId": "f0bf43da",
       "forkNext": "0"
     },
-    "source": "https://raw.githubusercontent.com/bnb-chain/bsc/v1.7.3/params/config.go",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "source": "https://raw.githubusercontent.com/bnb-chain/bsc/master/params/config.go",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "216c4fbd",
@@ -323,7 +323,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "c61a6098",
@@ -363,7 +363,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "bef71d30",
@@ -395,7 +395,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "fc64ec04",
@@ -483,7 +483,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "fe3366e7",
@@ -530,17 +530,17 @@
       "at": "06000064"
     },
     "source": "config/gnosis-chain.json",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z"
+    "generatedAt": "2026-05-18T00:18:37.349764Z"
   },
   "polygon-amoy": {
     "chainId": 80002,
     "genesisHex": "7202b2b53c5a0836e773e319d18922cc756dd67432f9a1f65352b61f4406c697",
     "current": {
-      "forkId": "7679e193",
+      "forkId": "8b7e4175",
       "forkNext": "0"
     },
-    "source": "https://raw.githubusercontent.com/0xPolygon/bor/v2.2.11/params/config.go",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "source": "https://raw.githubusercontent.com/0xPolygon/bor/master/params/config.go",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "be06a477",
@@ -552,22 +552,10 @@
       },
       {
         "forkId": "b4f6ec4f",
-        "forkNext": "b50f00"
-      },
-      {
-        "forkId": "331eb7af",
         "forkNext": "15b5e00"
       },
       {
-        "forkId": "d0ad2c34",
-        "forkNext": "161c3b1"
-      },
-      {
-        "forkId": "edd76d8a",
-        "forkNext": "1624f9f"
-      },
-      {
-        "forkId": "7679e193",
+        "forkId": "8b7e4175",
         "forkNext": "0"
       }
     ]
@@ -576,11 +564,11 @@
     "chainId": 137,
     "genesisHex": "a9c28ce2141b56c474f1dc504bee9b01eb1bd7d1a507580d5519d4437a97de1b",
     "current": {
-      "forkId": "3e863c31",
+      "forkId": "22d523b2",
       "forkNext": "0"
     },
-    "source": "https://raw.githubusercontent.com/0xPolygon/bor/v2.2.11/params/config.go",
-    "generatedAt": "2026-05-17T18:21:35.121312996Z",
+    "source": "https://raw.githubusercontent.com/0xPolygon/bor/master/params/config.go",
+    "generatedAt": "2026-05-18T00:18:37.349764Z",
     "forks": [
       {
         "forkId": "0e07e722",
@@ -596,38 +584,18 @@
       },
       {
         "forkId": "4f2f71cc",
-        "forkNext": "246b800"
-      },
-      {
-        "forkId": "dc6f33bc",
-        "forkNext": "2ada600"
-      },
-      {
-        "forkId": "4ba3914e",
         "forkNext": "302eb78"
       },
       {
-        "forkId": "5244d08f",
+        "forkId": "dc08865c",
         "forkNext": "3455760"
       },
       {
-        "forkId": "4e4cd585",
-        "forkNext": "3b64c00"
-      },
-      {
-        "forkId": "97f1794f",
+        "forkId": "f097bc13",
         "forkNext": "4609c00"
       },
       {
-        "forkId": "4bc6320d",
-        "forkNext": "46649d1"
-      },
-      {
-        "forkId": "3a1edcf9",
-        "forkNext": "466818c"
-      },
-      {
-        "forkId": "3e863c31",
+        "forkId": "22d523b2",
         "forkNext": "0"
       }
     ]

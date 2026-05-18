@@ -73,7 +73,7 @@
       "rpcUrl": "https://bsc-dataseed.binance.org",
       "forkProvider": "bsc",
       "forkSourceUrl": "https://raw.githubusercontent.com/bnb-chain/bsc",
-      "forkSourceRef": "v1.7.3",
+      "forkSourceRef": "master",
       "forkConfigName": "BSCChainConfig",
       "forkGenesisName": "BSCGenesisHash",
       "topN": 100
@@ -88,7 +88,7 @@
       "rpcUrl": "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
       "forkProvider": "bsc",
       "forkSourceUrl": "https://raw.githubusercontent.com/bnb-chain/bsc",
-      "forkSourceRef": "v1.7.3",
+      "forkSourceRef": "master",
       "forkConfigName": "ChapelChainConfig",
       "forkGenesisName": "ChapelGenesisHash",
       "forkHashes": [
@@ -107,7 +107,7 @@
       "sourceUrl": "enrtree://AKUEZKN7PSKVNR65FZDHECMKOJQSGPARGTPPBI7WS2VUL4EGR6XPC@pos.polygon-peers.io",
       "forkProvider": "polygon_bor",
       "forkSourceUrl": "https://raw.githubusercontent.com/0xPolygon/bor",
-      "forkSourceRef": "v2.2.11",
+      "forkSourceRef": "master",
       "forkConfigName": "BorMainnetChainConfig",
       "forkGenesisName": "BorMainnetGenesisHash",
       "topN": 100
@@ -123,7 +123,7 @@
       "sourceUrl": "enrtree://AKUEZKN7PSKVNR65FZDHECMKOJQSGPARGTPPBI7WS2VUL4EGR6XPC@amoy.polygon-peers.io",
       "forkProvider": "polygon_bor",
       "forkSourceUrl": "https://raw.githubusercontent.com/0xPolygon/bor",
-      "forkSourceRef": "v2.2.11",
+      "forkSourceRef": "master",
       "forkConfigName": "AmoyChainConfig",
       "forkGenesisName": "AmoyGenesisHash",
       "topN": 50
@@ -139,7 +139,7 @@
       "network": "mainnet",
       "forkProvider": "op_stack_superchain",
       "forkSourceUrl": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry",
-      "forkSourceRef": "main",
+      "forkSourceRef": "master",
       "forkConfigName": "superchain",
       "topN": 100
     },
@@ -154,7 +154,7 @@
       "network": "sepolia",
       "forkProvider": "op_stack_superchain",
       "forkSourceUrl": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry",
-      "forkSourceRef": "main",
+      "forkSourceRef": "master",
       "forkConfigName": "superchain",
       "topN": 50
     },

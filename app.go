@@ -1110,11 +1110,6 @@ func forkTuplesFromClientConfig(src string, configName string, genesisName strin
 	}
 
 	blockForks, timeForks := parseForkPointsFromStruct(block)
-	if borBlock := findFieldStructLiteral(block, "Bor"); borBlock != "" {
-		borBlockForks, borTimeForks := parseForkPointsFromStruct(borBlock)
-		blockForks = append(blockForks, borBlockForks...)
-		timeForks = append(timeForks, borTimeForks...)
-	}
 	blockForks = dedupUint64s(blockForks)
 	timeForks = dedupUint64s(timeForks)
 	return computeForkTuples(genesisHex, blockForks, timeForks, head, now)
@@ -1196,6 +1191,7 @@ func parseClientGenesisHash(src string, name string) (string, error) {
 }
 
 func parseForkPointsFromStruct(block string) ([]uint64, []uint64) {
+	block = topLevelStructFields(block)
 	re := regexp.MustCompile(`([A-Za-z0-9_]+(?:Block|Time)):\s*(?:big\.NewInt\(([0-9_]+)\)|newUint64\(([0-9_]+)\)|uint64Ptr\(([0-9_]+)\)|uint64\(([0-9_]+)\)|([0-9_]+))`)
 	matches := re.FindAllStringSubmatch(block, -1)
 	blockForks := make([]uint64, 0, len(matches))
@@ -1224,6 +1220,26 @@ func parseForkPointsFromStruct(block string) ([]uint64, []uint64) {
 	return blockForks, timeForks
 }
 
+func topLevelStructFields(block string) string {
+	var b strings.Builder
+	depth := 0
+	for i := 0; i < len(block); i++ {
+		ch := block[i]
+		switch ch {
+		case '{':
+			depth++
+			continue
+		case '}':
+			depth--
+			continue
+		}
+		if depth == 1 {
+			b.WriteByte(ch)
+		}
+	}
+	return b.String()
+}
+
 func tomlStringField(src string, section string, key string) (string, error) {
 	body := tomlSection(src, section)
 	if body == "" {
@@ -1249,31 +1265,6 @@ func tomlSection(src string, section string) string {
 		return rest
 	}
 	return rest[:next[0]]
-}
-
-func findFieldStructLiteral(src string, name string) string {
-	start := strings.Index(src, name+":")
-	if start < 0 {
-		return ""
-	}
-	open := strings.Index(src[start:], "{")
-	if open < 0 {
-		return ""
-	}
-	open += start
-	depth := 0
-	for i := open; i < len(src); i++ {
-		switch src[i] {
-		case '{':
-			depth++
-		case '}':
-			depth--
-			if depth == 0 {
-				return src[open : i+1]
-			}
-		}
-	}
-	return ""
 }
 
 func discoverForkTuplesForChain(chain ChainConfig, allNodes map[string]NodeRecord) (forkTuple, []forkTuple, bool) {
