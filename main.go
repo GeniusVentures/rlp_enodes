@@ -175,9 +175,6 @@ func ensureChainOutputBootnodes(chain ChainConfig, output ChainOutput, topN int)
 	if output.Nodes == nil {
 		output.Nodes = []OutputNode{}
 	}
-	if output.Bootnodes != nil {
-		return output
-	}
 	bootnodes, err := loadChainBootnodes(chain, topN)
 	if err != nil {
 		log.Printf("WARNING [%s] load bootnodes: %v", chain.Name, err)

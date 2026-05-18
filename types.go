@@ -67,7 +67,7 @@ type NodeRecord struct {
 
 // OutputNode is one entry in an output {chain}.json file.
 type OutputNode struct {
-	ENR          string    `json:"enr"`
+	ENR          string    `json:"enr,omitempty"`
 	Enode        string    `json:"enode,omitempty"`
 	Pubkey       string    `json:"pubkey"`
 	Score        int       `json:"score"`

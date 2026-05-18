@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "additionalProperties": {
+    "oneOf": [
+      { "$ref": "#/$defs/chainOutput" },
+      { "type": "string" }
+    ]
+  },
+  "properties": {
+    "signature": { "type": "string" },
+    "signerAddress": { "type": "string" }
+  },
+  "$defs": {
+    "chainOutput": {
+      "type": "object",
+      "required": ["networkId", "genesisHex", "forkId", "forkNext", "nodes", "bootnodes"],
+      "properties": {
+        "networkId": { "type": "integer" },
+        "genesisHex": { "type": "string" },
+        "forkId": { "type": "string" },
+        "forkNext": { "type": "string" },
+        "upcomingFork": { "$ref": "#/$defs/upcomingFork" },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/outputNode" }
+        },
+        "bootnodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/outputNode" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "upcomingFork": {
+      "type": "object",
+      "required": ["at", "nodes"],
+      "properties": {
+        "forkId": { "type": "string" },
+        "forkNext": { "type": "string" },
+        "at": { "type": "string" },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/outputNode" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputNode": {
+      "type": "object",
+      "required": ["pubkey", "score"],
+      "properties": {
+        "enr": { "type": "string" },
+        "enode": { "type": "string" },
+        "pubkey": { "type": "string" },
+        "score": { "type": "integer" },
+        "lastResponse": { "type": "string", "format": "date-time" },
+        "ip": { "type": "string" },
+        "port": { "type": "integer" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -522,7 +522,10 @@ func outputNodeFromRecord(record string) (OutputNode, bool) {
 		return OutputNode{}, false
 	}
 
-	out := OutputNode{ENR: record}
+	out := OutputNode{}
+	if strings.HasPrefix(record, "enr:") {
+		out.ENR = record
+	}
 	if enodeURL := n.URLv4(); enodeURL != "" {
 		out.Enode = enodeURL
 	}
@@ -647,11 +650,8 @@ func printDiscovery(allNodes map[string]NodeRecord) {
 // ---------------------------------------------------------------------------
 
 func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir string, topN int, forkIDs ForkIDIndex) (ChainOutput, error) {
-	if chain.FilterType == "bootnodes_yaml" {
-		return processBootnodesYAMLChain(chain, outputDir, topN, forkIDs)
-	}
-	if chain.FilterType == "bootnodes_go" {
-		return processBootnodesGOChain(chain, outputDir, topN, forkIDs)
+	if chain.FilterType == "bootnodes_yaml" || chain.FilterType == "bootnodes_go" {
+		return processBootnodeSourceOnlyChain(chain, outputDir, topN, forkIDs)
 	}
 	if chain.FilterType == "bootnodes_enrtree" {
 		return processBootnodesENRTreeChain(chain, outputDir, topN, forkIDs)
@@ -754,6 +754,24 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 	return chainOutput, nil
 }
 
+func processBootnodeSourceOnlyChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) (ChainOutput, error) {
+	bootnodes, err := loadChainBootnodes(chain, topN)
+	if err != nil {
+		return ChainOutput{}, fmt.Errorf("load bootnodes: %w", err)
+	}
+
+	fork := chainForkTuple(bootnodes)
+	if forkIDTuple, ok := currentForkTupleForChain(chain, forkIDs); ok {
+		fork = forkIDTuple
+	}
+
+	chainOutput := newChainOutput(chain, []OutputNode{}, bootnodes, fork.forkID, fork.forkNext, nil)
+	if err := writeChainOutput(chain, chainOutput, outputDir); err != nil {
+		return ChainOutput{}, fmt.Errorf("write chain output: %w", err)
+	}
+	return chainOutput, nil
+}
+
 func processBootnodesYAMLChain(chain ChainConfig, outputDir string, topN int, forkIDs ForkIDIndex) (ChainOutput, error) {
 	bootnodes, err := loadBootnodesYAML(chain.SourceURL)
 	if err != nil {
@@ -792,7 +810,10 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 			continue
 		}
 
-		out := OutputNode{ENR: record}
+		out := OutputNode{}
+		if strings.HasPrefix(record, "enr:") {
+			out.ENR = record
+		}
 		if enodeURL := n.URLv4(); enodeURL != "" {
 			out.Enode = enodeURL
 		}
@@ -836,7 +857,16 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 	}
 
 	upcoming := buildUpcomingForkOutputFromNodes(chain, forkIDs, upcomingNodes, topN)
-	chainOutput := newChainOutput(chain, output, cloneOutputNodes(output), fork.forkID, fork.forkNext, upcoming)
+	outputNodes := output
+	outputBootnodes := []OutputNode{}
+	if chain.BootnodesType != "" {
+		var err error
+		outputBootnodes, err = loadChainBootnodes(chain, topN)
+		if err != nil {
+			return ChainOutput{}, fmt.Errorf("load explicit bootnodes: %w", err)
+		}
+	}
+	chainOutput := newChainOutput(chain, outputNodes, outputBootnodes, fork.forkID, fork.forkNext, upcoming)
 	if err := writeChainOutput(chain, chainOutput, outputDir); err != nil {
 		return ChainOutput{}, fmt.Errorf("write chain output: %w", err)
 	}

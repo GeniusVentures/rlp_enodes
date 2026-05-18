@@ -215,11 +215,11 @@ both advertise the `bsc` ENR key but at different fork hashes.
 | Ethereum Hoodi | 560048 | `geth_network: hoodi` |
 | BNB Smart Chain | 56 | `enr_field: bsc` |
 | BNB Smart Chain Testnet | 97 | `enr_field: bsc` + `fork_hash_list` (compound) |
-| Polygon PoS Mainnet | 137 | `fork_hash_list` |
-| Polygon Amoy Testnet | 80002 | `fork_hash_list` |
+| Polygon PoS Mainnet | 137 | `bootnodes_enrtree` + explicit `bootnodes_go` |
+| Polygon Amoy Testnet | 80002 | `bootnodes_enrtree` + explicit `bootnodes_go` |
 | Base Mainnet | 8453 | `bootnodes_go` |
 | Base Sepolia Testnet | 84532 | `bootnodes_go` |
-| Gnosis Chain (xDai) | 100 | `bootnodes_yaml` |
+| Gnosis Chain (xDai) | 100 | `bootnodes_go` |
 
 ## Adding or updating chains
 
