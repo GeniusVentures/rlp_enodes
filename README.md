@@ -136,12 +136,8 @@ When signing is enabled, it also includes top-level `signature` and
   "gnosis-chain": {
     "networkId": 100,
     "genesisHex": "...",
-    "forkId": "05000064",
-    "forkNext": "06000064",
-    "upcomingFork": {
-      "at": "06000064",
-      "nodes": []
-    },
+    "forkId": "06000064",
+    "forkNext": "0",
     "nodes": []
   },
   "signature": "0x<65-byte-secp256k1-signature>",

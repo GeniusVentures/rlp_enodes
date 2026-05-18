@@ -50,6 +50,9 @@ type ChainConfig struct {
 	ForkGenesisName string   `json:"forkGenesisName,omitempty"`
 	ForkConfigURL   string   `json:"forkConfigUrl,omitempty"`
 	ForkConfigPath  string   `json:"forkConfigPath,omitempty"`
+	BootnodesType   string   `json:"bootnodesType,omitempty"`
+	BootnodesURL    string   `json:"bootnodesUrl,omitempty"`
+	BootnodesKey    string   `json:"bootnodesKey,omitempty"`
 }
 
 // NodeRecord mirrors one entry in all.json.
@@ -69,8 +72,8 @@ type OutputNode struct {
 	Pubkey       string    `json:"pubkey"`
 	Score        int       `json:"score"`
 	LastResponse time.Time `json:"lastResponse,omitempty"`
-	ForkID       string    `json:"forkId,omitempty"`
-	ForkNext     string    `json:"forkNext,omitempty"`
+	ForkID       string    `json:"-"`
+	ForkNext     string    `json:"-"`
 	IP           string    `json:"ip,omitempty"`
 	Port         int       `json:"port,omitempty"`
 }
@@ -83,6 +86,7 @@ type ChainOutput struct {
 	ForkNext      string              `json:"forkNext"`
 	UpcomingFork  *UpcomingForkOutput `json:"upcomingFork,omitempty"`
 	Nodes         []OutputNode        `json:"nodes"`
+	Bootnodes     []OutputNode        `json:"bootnodes"`
 	Signature     string              `json:"signature,omitempty"`
 	SignerAddress string              `json:"signerAddress,omitempty"`
 }

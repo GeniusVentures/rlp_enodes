@@ -1,7 +1,9 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/base64"
@@ -324,6 +326,233 @@ func loadBootnodesENRTree(treeURL string, topN int) ([]string, error) {
 	return bootnodes, nil
 }
 
+func loadChainBootnodes(chain ChainConfig, topN int) ([]OutputNode, error) {
+	records, err := loadChainBootnodeRecords(chain, topN)
+	if err != nil {
+		return nil, err
+	}
+	return outputNodesFromRecords(records), nil
+}
+
+func loadChainBootnodeRecords(chain ChainConfig, topN int) ([]string, error) {
+	if chain.BootnodesType != "" {
+		return loadExplicitBootnodes(chain, topN)
+	}
+
+	switch chain.FilterType {
+	case "bootnodes_yaml":
+		return loadBootnodesYAML(chain.SourceURL)
+	case "bootnodes_go":
+		records, err := loadBootnodesGo(chain.SourceURL, chain.SourceKey)
+		if err != nil {
+			return nil, err
+		}
+		for i := range records {
+			records[i] = normalizeGoBootnode(records[i])
+		}
+		return records, nil
+	case "bootnodes_enrtree":
+		return loadBootnodesENRTree(chain.SourceURL, topN)
+	}
+
+	sourceURL, sourceKey, ok := chainBootnodesGoSource(chain)
+	if !ok {
+		return []string{}, nil
+	}
+	records, err := loadBootnodesGo(sourceURL, sourceKey)
+	if err != nil {
+		return nil, err
+	}
+	for i := range records {
+		records[i] = normalizeGoBootnode(records[i])
+	}
+	return records, nil
+}
+
+func loadExplicitBootnodes(chain ChainConfig, topN int) ([]string, error) {
+	switch chain.BootnodesType {
+	case "yaml":
+		return loadBootnodesYAML(chain.BootnodesURL)
+	case "go":
+		records, err := loadBootnodesGo(chain.BootnodesURL, chain.BootnodesKey)
+		if err != nil {
+			return nil, err
+		}
+		for i := range records {
+			records[i] = normalizeGoBootnode(records[i])
+		}
+		return records, nil
+	case "enrtree":
+		return loadBootnodesENRTree(chain.BootnodesURL, topN)
+	case "zip_toml_static_nodes":
+		return loadZipTOMLStaticNodes(chain.BootnodesURL, chain.BootnodesKey)
+	default:
+		return nil, fmt.Errorf("unsupported bootnodesType %q", chain.BootnodesType)
+	}
+}
+
+func loadZipTOMLStaticNodes(url string, path string) ([]string, error) {
+	if url == "" {
+		return nil, fmt.Errorf("missing bootnodesUrl")
+	}
+	if path == "" {
+		return nil, fmt.Errorf("missing bootnodesKey")
+	}
+	raw, err := loadTextURL(url)
+	if err != nil {
+		return nil, err
+	}
+	reader, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range reader.File {
+		if file.Name != path {
+			continue
+		}
+		rc, err := file.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer rc.Close()
+		data, err := io.ReadAll(rc)
+		if err != nil {
+			return nil, err
+		}
+		return parseTOMLStringArray(string(data), "StaticNodes")
+	}
+	return nil, fmt.Errorf("%s not found in zip", path)
+}
+
+func parseTOMLStringArray(src string, key string) ([]string, error) {
+	var (
+		values  []string
+		inArray bool
+	)
+	prefix := key + " = ["
+	scanner := bufio.NewScanner(strings.NewReader(src))
+	for scanner.Scan() {
+		line := strings.TrimSpace(stripYAMLComment(scanner.Text()))
+		if line == "" {
+			continue
+		}
+		if !inArray {
+			if line == prefix {
+				inArray = true
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "]") {
+			return values, nil
+		}
+		start := strings.IndexByte(line, '"')
+		end := strings.LastIndexByte(line, '"')
+		if start == -1 || end <= start {
+			continue
+		}
+		value, err := strconv.Unquote(line[start : end+1])
+		if err != nil || value == "" {
+			continue
+		}
+		values = append(values, value)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if !inArray {
+		return nil, fmt.Errorf("%s not found", key)
+	}
+	return values, nil
+}
+
+func chainBootnodesGoSource(chain ChainConfig) (string, string, bool) {
+	ref := chain.ForkSourceRef
+	if ref == "" {
+		ref = "master"
+	}
+	baseURL := strings.TrimRight(chain.ForkSourceURL, "/")
+	if baseURL == "" {
+		return "", "", false
+	}
+
+	switch chain.ForkProvider {
+	case "ethereum_geth":
+		sourceKey := gethBootnodesKey(chain.Network)
+		return baseURL + "/" + ref + "/params/bootnodes.go", sourceKey, sourceKey != ""
+	case "bsc":
+		if chain.ChainID != 56 {
+			return "", "", false
+		}
+		return baseURL + "/" + ref + "/params/bootnodes.go", "MainnetBootnodes", true
+	default:
+		return "", "", false
+	}
+}
+
+func gethBootnodesKey(network string) string {
+	switch network {
+	case "mainnet":
+		return "MainnetBootnodes"
+	case "sepolia":
+		return "SepoliaBootnodes"
+	case "holesky":
+		return "HoleskyBootnodes"
+	case "hoodi":
+		return "HoodiBootnodes"
+	default:
+		return ""
+	}
+}
+
+func outputNodesFromRecords(records []string) []OutputNode {
+	output := make([]OutputNode, 0, len(records))
+	for _, record := range records {
+		node, ok := outputNodeFromRecord(record)
+		if !ok {
+			continue
+		}
+		output = append(output, node)
+	}
+	return output
+}
+
+func outputNodeFromRecord(record string) (OutputNode, bool) {
+	n, err := enode.Parse(enode.ValidSchemes, record)
+	if err != nil {
+		return OutputNode{}, false
+	}
+
+	out := OutputNode{ENR: record}
+	if enodeURL := n.URLv4(); enodeURL != "" {
+		out.Enode = enodeURL
+	}
+	if pubkey := n.Pubkey(); pubkey != nil {
+		out.Pubkey = fmt.Sprintf("%x", crypto.FromECDSAPub(pubkey)[1:])
+	}
+	if forkHash, forkNext := extractForkID(n); forkHash != "" {
+		out.ForkID = forkHash
+		out.ForkNext = forkNext
+	}
+	if ip := n.IP(); ip != nil {
+		out.IP = ip.String()
+	}
+	if port := n.TCP(); port > 0 {
+		out.Port = port
+	} else if port := n.UDP(); port > 0 {
+		out.Port = port
+	}
+	return out, true
+}
+
+func cloneOutputNodes(nodes []OutputNode) []OutputNode {
+	if nodes == nil {
+		return []OutputNode{}
+	}
+	out := make([]OutputNode, len(nodes))
+	copy(out, nodes)
+	return out
+}
+
 func normalizeGoBootnode(record string) string {
 	if !strings.HasPrefix(record, "enode://") {
 		return record
@@ -512,8 +741,13 @@ func processChain(chain ChainConfig, allNodes map[string]NodeRecord, outputDir s
 	} else if writeFork.forkID == "" {
 		writeFork = chainForkTuple(output)
 	}
+	bootnodes, err := loadChainBootnodes(chain, topN)
+	if err != nil {
+		log.Printf("WARNING [%s] load bootnodes: %v", chain.Name, err)
+		bootnodes = []OutputNode{}
+	}
 	upcoming := buildUpcomingForkOutput(chain, forkIDs, upcomingCandidates, topN)
-	chainOutput := newChainOutput(chain, output, writeFork.forkID, writeFork.forkNext, upcoming)
+	chainOutput := newChainOutput(chain, output, bootnodes, writeFork.forkID, writeFork.forkNext, upcoming)
 	if err := writeChainOutput(chain, chainOutput, outputDir); err != nil {
 		return ChainOutput{}, fmt.Errorf("write chain output: %w", err)
 	}
@@ -602,11 +836,10 @@ func processBootnodeRecords(chain ChainConfig, bootnodes []string, outputDir str
 	}
 
 	upcoming := buildUpcomingForkOutputFromNodes(chain, forkIDs, upcomingNodes, topN)
-	chainOutput := newChainOutput(chain, output, fork.forkID, fork.forkNext, upcoming)
+	chainOutput := newChainOutput(chain, output, cloneOutputNodes(output), fork.forkID, fork.forkNext, upcoming)
 	if err := writeChainOutput(chain, chainOutput, outputDir); err != nil {
 		return ChainOutput{}, fmt.Errorf("write chain output: %w", err)
 	}
-	log.Printf("[%s] Wrote %d nodes → %s", chain.Name, len(output), filepath.Join(outputDir, chain.Name+".json"))
 	return chainOutput, nil
 }
 
@@ -1762,7 +1995,7 @@ func chainForkTuple(nodes []OutputNode) forkTuple {
 	return forkTuple{}
 }
 
-func newChainOutput(chain ChainConfig, nodes []OutputNode, forkID string, forkNext string, upcoming *UpcomingForkOutput) ChainOutput {
+func newChainOutput(chain ChainConfig, nodes []OutputNode, bootnodes []OutputNode, forkID string, forkNext string, upcoming *UpcomingForkOutput) ChainOutput {
 	return ChainOutput{
 		NetworkID:    chain.ChainID,
 		GenesisHex:   chain.GenesisHex,
@@ -1770,6 +2003,7 @@ func newChainOutput(chain ChainConfig, nodes []OutputNode, forkID string, forkNe
 		ForkNext:     forkNext,
 		UpcomingFork: upcoming,
 		Nodes:        nodes,
+		Bootnodes:    bootnodes,
 	}
 }
 
@@ -1821,31 +2055,144 @@ func loadRemoteForkConfig(url string) (string, string, error) {
 		return "", "", err
 	}
 
-	var (
-		currentForkVersion string
-		nextForkVersion    string
-	)
-	scanner := bufio.NewScanner(strings.NewReader(string(raw)))
+	currentForkVersion, nextForkVersion, err := forkVersionsFromBeaconConfig(string(raw), time.Now())
+	if err != nil {
+		return "", "", err
+	}
+	return currentForkVersion, nextForkVersion, nil
+}
+
+func forkVersionsFromBeaconConfig(src string, now time.Time) (string, string, error) {
+	versions := make(map[string]string)
+	epochs := make(map[string]uint64)
+	var genesisTime uint64
+	presetBase := ""
+	slotsPerEpoch := uint64(32)
+	secondsPerSlot := uint64(12)
+	slotsPerEpochSet := false
+	secondsPerSlotSet := false
+
+	scanner := bufio.NewScanner(strings.NewReader(src))
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "#") || line == "" {
+		line := stripYAMLComment(strings.TrimSpace(scanner.Text()))
+		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(line, "FULU_FORK_VERSION:") {
-			nextForkVersion = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "FULU_FORK_VERSION:")), "'")
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
 			continue
 		}
-		if strings.HasPrefix(line, "ELECTRA_FORK_VERSION:") {
-			currentForkVersion = strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, "ELECTRA_FORK_VERSION:")), "'")
+		key = strings.TrimSpace(key)
+		value = strings.Trim(strings.TrimSpace(value), `"'`)
+		if value == "" {
+			continue
+		}
+
+		switch key {
+		case "PRESET_BASE":
+			presetBase = value
+		case "MIN_GENESIS_TIME":
+			genesisTime = parseUintOrZero(value)
+		case "SLOTS_PER_EPOCH":
+			slotsPerEpoch = parseUintOrDefault(value, slotsPerEpoch)
+			slotsPerEpochSet = true
+		case "SECONDS_PER_SLOT":
+			secondsPerSlot = parseUintOrDefault(value, secondsPerSlot)
+			secondsPerSlotSet = true
+		}
+
+		if strings.HasSuffix(key, "_FORK_VERSION") {
+			name := strings.TrimSuffix(key, "_FORK_VERSION")
+			versions[name] = strings.TrimPrefix(value, "0x")
+			continue
+		}
+		if strings.HasSuffix(key, "_FORK_EPOCH") {
+			name := strings.TrimSuffix(key, "_FORK_EPOCH")
+			if epoch := parseUintOrZero(value); epoch != math.MaxUint64 {
+				epochs[name] = epoch
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return "", "", err
 	}
+	if genesisTime == 0 {
+		return "", "", fmt.Errorf("missing MIN_GENESIS_TIME")
+	}
+	if presetBase == "gnosis" {
+		if !slotsPerEpochSet {
+			slotsPerEpoch = 16
+		}
+		if !secondsPerSlotSet {
+			secondsPerSlot = 5
+		}
+	}
 
-	currentForkVersion = strings.TrimPrefix(currentForkVersion, "0x")
-	nextForkVersion = strings.TrimPrefix(nextForkVersion, "0x")
-	return currentForkVersion, nextForkVersion, nil
+	type beaconFork struct {
+		name    string
+		version string
+		epoch   uint64
+	}
+	forks := make([]beaconFork, 0, len(versions))
+	if version := versions["GENESIS"]; version != "" {
+		forks = append(forks, beaconFork{name: "GENESIS", version: version, epoch: 0})
+	}
+	for name, version := range versions {
+		if name == "GENESIS" {
+			continue
+		}
+		epoch, ok := epochs[name]
+		if !ok {
+			continue
+		}
+		forks = append(forks, beaconFork{name: name, version: version, epoch: epoch})
+	}
+	sort.Slice(forks, func(i, j int) bool {
+		if forks[i].epoch != forks[j].epoch {
+			return forks[i].epoch < forks[j].epoch
+		}
+		return forks[i].name < forks[j].name
+	})
+
+	if len(forks) == 0 {
+		return "", "", fmt.Errorf("no fork versions found")
+	}
+
+	nowUnix := uint64(now.Unix())
+	current := forks[0]
+	next := ""
+	for _, fork := range forks {
+		activation := genesisTime + fork.epoch*slotsPerEpoch*secondsPerSlot
+		if activation <= nowUnix {
+			current = fork
+			continue
+		}
+		next = fork.version
+		break
+	}
+	if next == "" {
+		next = "0"
+	}
+	return current.version, next, nil
+}
+
+func stripYAMLComment(line string) string {
+	if before, _, ok := strings.Cut(line, "#"); ok {
+		line = before
+	}
+	return strings.TrimSpace(line)
+}
+
+func parseUintOrZero(value string) uint64 {
+	return parseUintOrDefault(value, 0)
+}
+
+func parseUintOrDefault(value string, fallback uint64) uint64 {
+	parsed, err := strconv.ParseUint(strings.ReplaceAll(value, "_", ""), 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func loadCurrentBlockNumber(rpcURL string) (uint64, error) {

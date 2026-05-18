@@ -94,6 +94,15 @@ func main() {
 				log.Printf("ERROR loading chain %s from disk: %v", chain.Name, err)
 				continue
 			}
+			topN := chain.TopN
+			if topN <= 0 {
+				topN = defaultTopN
+			}
+			output = ensureChainOutputBootnodes(chain, output, topN)
+			if err := writeChainOutput(chain, output, outDir); err != nil {
+				log.Printf("ERROR writing chain %s output: %v", chain.Name, err)
+				continue
+			}
 			chainEnodes[chain.Name] = output
 			log.Printf("[%s] Loaded %d nodes from existing output file", chain.Name, len(output.Nodes))
 			continue
@@ -109,6 +118,9 @@ func main() {
 		}
 		if output.Nodes == nil {
 			output.Nodes = []OutputNode{}
+		}
+		if output.Bootnodes == nil {
+			output.Bootnodes = []OutputNode{}
 		}
 		chainEnodes[chain.Name] = output
 	}
@@ -133,6 +145,14 @@ func loadChainOutputsFromDisk(cfg *AppConfig, outDir string) (map[string]ChainOu
 		if err := json.Unmarshal(data, &output); err != nil {
 			return nil, err
 		}
+		topN := chain.TopN
+		if topN <= 0 {
+			topN = cfg.DefaultTopN
+		}
+		if topN <= 0 {
+			topN = 100
+		}
+		output = ensureChainOutputBootnodes(chain, output, topN)
 		chainEnodes[chain.Name] = output
 	}
 	return chainEnodes, nil
@@ -149,4 +169,21 @@ func loadChainOutputFromDisk(outDir string, chainName string) (ChainOutput, erro
 		return ChainOutput{}, err
 	}
 	return output, nil
+}
+
+func ensureChainOutputBootnodes(chain ChainConfig, output ChainOutput, topN int) ChainOutput {
+	if output.Nodes == nil {
+		output.Nodes = []OutputNode{}
+	}
+	if output.Bootnodes != nil {
+		return output
+	}
+	bootnodes, err := loadChainBootnodes(chain, topN)
+	if err != nil {
+		log.Printf("WARNING [%s] load bootnodes: %v", chain.Name, err)
+		output.Bootnodes = []OutputNode{}
+		return output
+	}
+	output.Bootnodes = bootnodes
+	return output
 }

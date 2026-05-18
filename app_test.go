@@ -29,6 +29,36 @@ var TestChainConfig = &ChainConfig{
 	}
 }
 
+func TestForkVersionsFromBeaconConfigUsesForkEpochs(t *testing.T) {
+	src := `
+MIN_GENESIS_TIME: 1638968400
+PRESET_BASE: 'gnosis'
+GENESIS_FORK_VERSION: 0x00000064
+ALTAIR_FORK_VERSION: 0x01000064
+ALTAIR_FORK_EPOCH: 512
+ELECTRA_FORK_VERSION: 0x05000064
+ELECTRA_FORK_EPOCH: 1337856
+FULU_FORK_VERSION: 0x06000064
+FULU_FORK_EPOCH: 1714688
+`
+
+	current, next, err := forkVersionsFromBeaconConfig(src, time.Unix(1776168400, 0))
+	if err != nil {
+		t.Fatalf("fork versions from beacon config: %v", err)
+	}
+	if current != "06000064" || next != "0" {
+		t.Fatalf("current/next = %s/%s, want 06000064/0", current, next)
+	}
+
+	current, next, err = forkVersionsFromBeaconConfig(src, time.Unix(1746010000, 0))
+	if err != nil {
+		t.Fatalf("fork versions from beacon config before Fulu: %v", err)
+	}
+	if current != "05000064" || next != "06000064" {
+		t.Fatalf("pre-Fulu current/next = %s/%s, want 05000064/06000064", current, next)
+	}
+}
+
 func TestCurrentGethForkTuple(t *testing.T) {
 	cfg, err := loadConfig("chains_config.json")
 	if err != nil {

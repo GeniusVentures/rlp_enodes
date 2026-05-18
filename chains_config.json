@@ -91,6 +91,9 @@
       "forkSourceRef": "master",
       "forkConfigName": "ChapelChainConfig",
       "forkGenesisName": "ChapelGenesisHash",
+      "bootnodesType": "zip_toml_static_nodes",
+      "bootnodesUrl": "https://github.com/bnb-chain/bsc/releases/latest/download/testnet.zip",
+      "bootnodesKey": "testnet/config.toml",
       "forkHashes": [
         "ef54c1e1"
       ],
@@ -162,10 +165,10 @@
       "name": "gnosis-chain",
       "chainId": 100,
       "genesisHex": "4f1dd23188aab3a76b463e4af801b52b1248ef073c648cbdc4c9333d3da79756",
-      "description": "Gnosis Chain (xDai) — sourced from the official Gnosis bootnodes YAML.",
+      "description": "Gnosis Chain (xDai) — sourced from the official Gnosis execution bootnodes YAML.",
       "filterType": "bootnodes_yaml",
-      "sourceUrl": "https://raw.githubusercontent.com/gnosischain/configs/refs/heads/main/mainnet/bootnodes.yaml",
-      "forkConfigPath": "config/gnosis-chain.json",
+      "sourceUrl": "https://raw.githubusercontent.com/gnosischain/configs/refs/heads/main/mainnet/bootnodes_execution.yaml",
+      "forkConfigUrl": "https://raw.githubusercontent.com/gnosischain/configs/refs/heads/main/mainnet/config.yaml",
       "topN": 100
     }
   ]
