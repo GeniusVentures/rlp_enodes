@@ -7,7 +7,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry/master/superchain/configs/mainnet/superchain.toml",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "67da0260",
@@ -51,6 +51,62 @@
       }
     ]
   },
+  "base-sepolia": {
+    "chainId": 84532,
+    "genesisHex": "0dcc9e089e30b90ddfc55be9a37dd15bc551aeee999d2e2b51414c54eaf934e4",
+    "current": {
+      "forkId": "010fde8f",
+      "forkNext": "0"
+    },
+    "source": "https://raw.githubusercontent.com/ethereum-optimism/superchain-registry/master/superchain/configs/sepolia/superchain.toml",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
+    "forks": [
+      {
+        "forkId": "b959b9f7",
+        "forkNext": "6553a790"
+      },
+      {
+        "forkId": "607cd5a1",
+        "forkNext": "6584d180"
+      },
+      {
+        "forkId": "80b36d7d",
+        "forkNext": "65d62c10"
+      },
+      {
+        "forkId": "34d4923d",
+        "forkNext": "66575100"
+      },
+      {
+        "forkId": "0aad4250",
+        "forkNext": "66ba3180"
+      },
+      {
+        "forkId": "f1c305e5",
+        "forkNext": "6745e270"
+      },
+      {
+        "forkId": "f2efaeff",
+        "forkNext": "67dc3b80"
+      },
+      {
+        "forkId": "7273b420",
+        "forkNext": "68012580"
+      },
+      {
+        "forkId": "bcd1fc50",
+        "forkNext": "691de981"
+      },
+      {
+        "forkId": "d85c2524",
+        "forkNext": "6a32c481"
+      },
+      {
+        "forkId": "010fde8f",
+        "forkNext": "0"
+      }
+    ]
+  },
   "bnb-smart-chain": {
     "chainId": 56,
     "genesisHex": "0d21840abff46b96c84b2ac9e10e4f5cdaeb5693cb665db62a2f3b02d2d57b5b",
@@ -59,7 +115,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/bnb-chain/bsc/master/params/config.go",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "3f2e9ae4",
@@ -162,7 +218,7 @@
       "at": "6a5ed9a8"
     },
     "source": "https://raw.githubusercontent.com/bnb-chain/bsc/master/params/config.go",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "216c4fbd",
@@ -278,7 +334,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "c61a6098",
@@ -318,7 +374,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "bef71d30",
@@ -350,7 +406,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "fc64ec04",
@@ -438,7 +494,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/ethereum/go-ethereum/master/params/config.go",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "fe3366e7",
@@ -482,7 +538,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/gnosischain/configs/refs/heads/main/mainnet/config.yaml",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z"
+    "generatedAt": "2026-07-09T06:14:56.207376915Z"
   },
   "polygon-amoy": {
     "chainId": 80002,
@@ -492,7 +548,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/0xPolygon/bor/master/params/config.go",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "be06a477",
@@ -520,7 +576,7 @@
       "forkNext": "0"
     },
     "source": "https://raw.githubusercontent.com/0xPolygon/bor/master/params/config.go",
-    "generatedAt": "2026-07-09T02:21:33.1728898Z",
+    "generatedAt": "2026-07-09T06:14:56.207376915Z",
     "forks": [
       {
         "forkId": "0e07e722",
