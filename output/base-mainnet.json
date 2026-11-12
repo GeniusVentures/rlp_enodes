@@ -5,13 +5,13 @@
   "forkNext": "0",
   "nodes": [
     {
-      "enr": "enr:-Je4QNU449FAxNkZudzSL2aABSDhSyCAWsK6GYzQ-wkMkGroSzalfXRtJ8XGku727xSxdtNHAdBqv1IhoC_cgs0pGrEDg2V0aMfGhAfJRi6AgmlkgnY0gmlwhCPU4xOJc2VjcDI1NmsxoQI7dOzzlXYxyT6eUtGP45JVNLjysLzo8pcTLGwf9wjVA4N0Y3CCJAaDdWRwgghw",
-      "enode": "enode://3b74ecf3957631c93e9e52d18fe3925534b8f2b0bce8f297132c6c1ff708d5032963bd091705eb826bb519709c3c0608ce2a1553760ba087eff3b64ad518b82a@35.212.227.19:9222?discport=2160",
-      "pubkey": "3b74ecf3957631c93e9e52d18fe3925534b8f2b0bce8f297132c6c1ff708d5032963bd091705eb826bb519709c3c0608ce2a1553760ba087eff3b64ad518b82a",
+      "enr": "enr:-Je4QMmQi2TVxkcWgPT8bntU0bYy7Ba6BgtStcPHb1bxdk79el7274dsnXWvV1Ve8TjLbc6GBhFdRX-hsqcf6gL_fEgCg2V0aMfGhAfJRi6AgmlkgnY0gmlwhNRfLQSJc2VjcDI1NmsxoQISW_AeFxOmAwKvUWzfcpdlEMGt0ImypayCSMQoOpc9foN0Y3CCC9aDdWRwgiPw",
+      "enode": "enode://125bf01e1713a60302af516cdf72976510c1add089b2a5ac8248c4283a973d7efd911a2d18a094ca4aeee7c242c9258e6e747cd8f36c7aecc24b09736c3fc0f2@212.95.45.4:3030?discport=9200",
+      "pubkey": "125bf01e1713a60302af516cdf72976510c1add089b2a5ac8248c4283a973d7efd911a2d18a094ca4aeee7c242c9258e6e747cd8f36c7aecc24b09736c3fc0f2",
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "35.212.227.19",
-      "port": 9222
+      "ip": "212.95.45.4",
+      "port": 3030
     },
     {
       "enr": "enr:-KO4QHJrtDxt4o49eYS5xk-xD8BT6vz8COvE2EbmqThyUWIVMnN2AfSzOVNiWxw6WrqNZo7Irl5T5beXJFgsiiWtI_2GAZ39TVawg2V0aMfGhAfJRi6AgmlkgnY0gmlwhKz__fSJc2VjcDI1NmsxoQLB8g0y6hCJLW6I5eLIKl3GS_IWOyR12ATJLAFAe-QP1oRzbmFwwIN0Y3CCKv6DdWRwgir-",
@@ -23,15 +23,6 @@
       "port": 11006
     },
     {
-      "enr": "enr:-KO4QP1O-u2JUtxTlJpd9wQhmUpAYAFOXGj0mbK6aJzlXkacJ17c1-xdHhm1_BXTqofMKwMRe-FR6sxxd4cuKWi4PSyGAZxy86Wag2V0aMfGhAfJRi6AgmlkgnY0gmlwhAMkH2-Jc2VjcDI1NmsxoQJXmZbTQTMLt2lw0hIvExWPtD5GYnkDQcRYHud3ahQI1oRzbmFwwIN0Y3CCdTCDdWRwgnUw",
-      "enode": "enode://579996d341330bb76970d2122f13158fb43e4662790341c4581ee7776a1408d6509b6829a4d4e346413604f23fa169c1b13a2f8f9d5a331a4f588ae9f82857be@3.36.31.111:30000",
-      "pubkey": "579996d341330bb76970d2122f13158fb43e4662790341c4581ee7776a1408d6509b6829a4d4e346413604f23fa169c1b13a2f8f9d5a331a4f588ae9f82857be",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "3.36.31.111",
-      "port": 30000
-    },
-    {
       "enr": "enr:-Je4QAsoYWirJNg7V9cJ4XteOzwTRVHfZV_8PFJ8nRjzb--wejSlf_5YNvAaovlUZtbo2LmNRybao6tGLjd9QZBZCl09g2V0aMfGhAfJRi6AgmlkgnY0gmlwhNhCMQWJc2VjcDI1NmsxoQJTSemJZ9pYuCkpAenu1sM4GZN3Y9q2U6i_emwrdLayN4N0Y3CCdgqDdWRwgnYK",
       "enode": "enode://5349e98967da58b8292901e9eed6c33819937763dab653a8bf7a6c2b74b6b237b804e4b44e5c521fe94cd5089fc9624c22e69ced78fa5d2f28025fc4eb80aab2@216.66.49.5:30218",
       "pubkey": "5349e98967da58b8292901e9eed6c33819937763dab653a8bf7a6c2b74b6b237b804e4b44e5c521fe94cd5089fc9624c22e69ced78fa5d2f28025fc4eb80aab2",
@@ -41,12 +32,21 @@
       "port": 30218
     },
     {
-      "enr": "enr:-KO4QAUqgi_kHfnOGpt05sYV7REknY3BqaX2PqTS4-7suO9rbKkNSbYxxMMTXwHb0xcwfEfuuuHbBrfPztMjiGGAAMqGAZdQAL4Qg2V0aMfGhAfJRi6AgmlkgnY0gmlwhHOETM2Jc2VjcDI1NmsxoQL-cU7a6rcN72ONULXyKlOpvIJWFYWrXeC-LdoKJQXGtYRzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://fe714edaeab70def638d50b5f22a53a9bc82561585ab5de0be2dda0a2505c6b5b23fac060de189c30fce16a3d81dbf51e38431b7d878b6ba5d6c91a819cbf590@115.132.76.205:30303",
-      "pubkey": "fe714edaeab70def638d50b5f22a53a9bc82561585ab5de0be2dda0a2505c6b5b23fac060de189c30fce16a3d81dbf51e38431b7d878b6ba5d6c91a819cbf590",
+      "enr": "enr:-KO4QGC432n_7uTrAzToQ6g5lYmiwZHfCdUk-r-WhwNzTp-_E7zHARI_uwNhidNJMoQsXfwJ4TmSR0o6V1o521diflmGAZ7pT5omg2V0aMfGhAfJRi6AgmlkgnY0gmlwhHt7xkOJc2VjcDI1NmsxoQI7sv0FMmTuPjX0aJaq92xoXNMBiET_Su9R5D9kSVBMuYRzbmFwwIN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://3bb2fd053264ee3e35f46896aaf76c685cd3018844ff4aef51e43f6449504cb92ff7bb671044c52000f18e931549cd900fcec7498b2b868ee54865bd32ebcce6@123.123.198.67:30303",
+      "pubkey": "3bb2fd053264ee3e35f46896aaf76c685cd3018844ff4aef51e43f6449504cb92ff7bb671044c52000f18e931549cd900fcec7498b2b868ee54865bd32ebcce6",
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "115.132.76.205",
+      "ip": "123.123.198.67",
+      "port": 30303
+    },
+    {
+      "enr": "enr:-J24QIDH6ORkZSqKaMVHfH23mdWfv-QeLwbbSsuZRaAhnIUyR1uy5OScpr2cwv7kWX4_l03eB7cQUi7XZuNw40xUHjaGAaHHqv55g2V0aMfGhAfJRi6AgmlkgnY0gmlwhH2k2WKJc2VjcDI1NmsxoQJlv32mEUE3vKBqOWwTpIkgYk0nnpQO776aeP8lkwJL_IN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://65bf7da6114137bca06a396c13a48920624d279e940eefbe9a78ff2593024bfce8593a92c97493e6c968f5582fd8fccd76b05931a506f0d01f9fd5d07830f400@125.164.217.98:30303",
+      "pubkey": "65bf7da6114137bca06a396c13a48920624d279e940eefbe9a78ff2593024bfce8593a92c97493e6c968f5582fd8fccd76b05931a506f0d01f9fd5d07830f400",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "125.164.217.98",
       "port": 30303
     },
     {
@@ -158,24 +158,6 @@
       "port": 30303
     },
     {
-      "enr": "enr:-KO4QPmH-ORPJnsRz8s9w2e3IyzOJ6_QaEWHSCwShW6vAqbtM4ELpzvZ2OdwPbwR2MMh6811iu6LPNrf62LYl0mesp2GAaFnM9C-g2V0aMfGhAfJRi6AgmlkgnY0gmlwhA_MbrqJc2VjcDI1NmsxoQOix3jW8EWxM-x1k3RjuYv1mzV461B0g-LGtB_R_3tNR4RzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://a2c778d6f045b133ec75937463b98bf59b3578eb507483e2c6b41fd1ff7b4d47c6c7200bca6293ca746a2aa51a4ae4fda96cda2ec774ea85cc4cd9d348a33b1f@15.204.110.186:30303",
-      "pubkey": "a2c778d6f045b133ec75937463b98bf59b3578eb507483e2c6b41fd1ff7b4d47c6c7200bca6293ca746a2aa51a4ae4fda96cda2ec774ea85cc4cd9d348a33b1f",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "15.204.110.186",
-      "port": 30303
-    },
-    {
-      "enr": "enr:-KO4QOuv9gsGCDW3sm4hmnx0PtJYq6EzBy096kcufZArJ-zzWTv9sIGzbVTvVoZQ11FC-KD06MQ9dVEzQdnr_0YdNPWGAZuC50gJg2V0aMfGhAfJRi6AgmlkgnY0gmlwhA_r5TaJc2VjcDI1NmsxoQJf6MmVPgcTavL8uXaCjnVGaL19rplPE-8wL4V9lbSzgIRzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://5fe8c9953e07136af2fcb976828e754668bd7dae994f13ef302f857d95b4b3800fac00f1f2eefcffda01a1a9b0d490efe048579372291f631026e554be93351e@15.235.229.54:30303",
-      "pubkey": "5fe8c9953e07136af2fcb976828e754668bd7dae994f13ef302f857d95b4b3800fac00f1f2eefcffda01a1a9b0d490efe048579372291f631026e554be93351e",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "15.235.229.54",
-      "port": 30303
-    },
-    {
       "enr": "enr:-KO4QM6lvmRorSfXU2KXVUCjMHcQ-OcoNM-wsc7xhVbSRLGxXQuJlYL8Fvw62vfdz9U1o9SRkO91HMekusuXrj9CCMaGAZxrlQuXg2V0aMfGhAfJRi6AgmlkgnY0gmlwhJdzWdiJc2VjcDI1NmsxoQMCiFZ5AGwo6xVwoE3DjtHPs8vWuOqGwtcbJHf0AttmLIRzbmFwwIN0Y3CCdl-DdWRwgnZf",
       "enode": "enode://02885679006c28eb1570a04dc38ed1cfb3cbd6b8ea86c2d71b2477f402db662c70cf0281eb92c8a0325050a14bb86d1897f5310c2f87d21c4e4185145ce9abb9@151.115.89.216:30303",
       "pubkey": "02885679006c28eb1570a04dc38ed1cfb3cbd6b8ea86c2d71b2477f402db662c70cf0281eb92c8a0325050a14bb86d1897f5310c2f87d21c4e4185145ce9abb9",
@@ -200,15 +182,6 @@
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
       "ip": "159.69.70.231",
-      "port": 30303
-    },
-    {
-      "enr": "enr:-KO4QGA1eDtGiFW8nrOxccseYVCo23ruKrpiulEJciCPH-UOaDjwz8jSoy-XdzQyU-Kc2HgoLGQh0D2CSXjDlNU1-B6GAaDWKYNNg2V0aMfGhAfJRi6AgmlkgnY0gmlwhBA96ISJc2VjcDI1NmsxoQNgwgBHqGMY9UoI5I5bmeXVGafWGohimQohSLU1aBG4kYRzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://60c20047a86318f54a08e48e5b99e5d519a7d61a8862990a2148b5356811b891aa37476fcd368a32651cbcad6008aba33e8615e95f100d8da3ad2f0d09e9fb4f@16.61.232.132:30303",
-      "pubkey": "60c20047a86318f54a08e48e5b99e5d519a7d61a8862990a2148b5356811b891aa37476fcd368a32651cbcad6008aba33e8615e95f100d8da3ad2f0d09e9fb4f",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "16.61.232.132",
       "port": 30303
     },
     {
@@ -239,6 +212,15 @@
       "port": 30303
     },
     {
+      "enr": "enr:-MK4QA_W8Ui5xVoYIfuFmHhcx3xry8dHJRnL-qin4yVNsJAyawCSosdhz9BXVi6zO7JZ_2Yh8YsHgaIGEivzI17dBaGGAaGsDTV9g2V0aMfGhAfJRi6AgmlkgnY0gmlwhKI3D9SDaXA2kCoBBPgCcRDaAAAAAAAAAAKJc2VjcDI1NmsxoQIxQiHLL8hbBGlRsG6D3eYA5acQrIzokgLGHrWqHmxSmoN0Y3CCdl-EdGNwNoJ2X4N1ZHCCdl-EdWRwNoJ2Xw",
+      "enode": "enode://314221cb2fc85b046951b06e83dde600e5a710ac8ce89202c61eb5aa1e6c529a5456bf8e46debac26371fe0716c38263d3215adf994fbfe9a980b88e01b1d8ea@162.55.15.212:30303",
+      "pubkey": "314221cb2fc85b046951b06e83dde600e5a710ac8ce89202c61eb5aa1e6c529a5456bf8e46debac26371fe0716c38263d3215adf994fbfe9a980b88e01b1d8ea",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "162.55.15.212",
+      "port": 30303
+    },
+    {
       "enr": "enr:-Ku4QEtd4-myfx1ALSc1k7zTguXkmjjKBvA7xLgTSv9JBOOdCwQ0603FM8AUvm-Ja9KUWR81AtA3MEHJOgCHy5pt60OGAZSPUBqFg2V0aMfGhAfJRi6AgmlkgnY0gmlwhKSYoV-Jc2VjcDI1NmsxoQLXj7pZ5BwZ91-m5jGnlcYpkVhSaX5rkBDTzsk7s_irlIRzbmFwwIN0Y3CCdl-DdWRwgvPbhHVkcDaCdl8",
       "enode": "enode://d78fba59e41c19f75fa6e631a795c629915852697e6b9010d3cec93bb3f8ab944d5f9afddcfbe887d2b224555fb644ccbaaf29a82d10ac0a6bf5c9e25134862e@164.152.161.95:30303?discport=62427",
       "pubkey": "d78fba59e41c19f75fa6e631a795c629915852697e6b9010d3cec93bb3f8ab944d5f9afddcfbe887d2b224555fb644ccbaaf29a82d10ac0a6bf5c9e25134862e",
@@ -266,12 +248,30 @@
       "port": 30303
     },
     {
+      "enr": "enr:-KO4QGMQDsmEB5vFfFjIvYivyefTlK_xZXEpUBLuelaWXPOcIy0YTlmjGtW3D3RGCg2d-DtcKZWGSWQXLRySNHNd0E2GAaBiUgncg2V0aMfGhAfJRi6AgmlkgnY0gmlwhKkoQZGJc2VjcDI1NmsxoQMrU018BHrkV8RUQn8lR25_6pXWKrvkmWQ70a9Zy8wEWoRzbmFwwIN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://2b534d7c047ae457c454427f25476e7fea95d62abbe499643bd1af59cbcc045af83620afb341df2e0192e052746527be0e285f9d32534872e18691b9f6f02d59@169.40.65.145:30303",
+      "pubkey": "2b534d7c047ae457c454427f25476e7fea95d62abbe499643bd1af59cbcc045af83620afb341df2e0192e052746527be0e285f9d32534872e18691b9f6f02d59",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "169.40.65.145",
+      "port": 30303
+    },
+    {
       "enr": "enr:-KO4QIDMUfQRHj6joeESh5Wx1Zu2ZCaNtLFVquRAHuSwZhb1DAs5jHVfSyoVONsAN26GYwVlyDs9idepbwxLHab9cfeGAZ4BfbNBg2V0aMfGhAfJRi6AgmlkgnY0gmlwhKkoQciJc2VjcDI1NmsxoQNDg15430vs_x2RixKEumAwRQyMwOciocSeYOk6S3FiKYRzbmFwwIN0Y3CCdl-DdWRwgnZf",
       "enode": "enode://43835e78df4becff1d918b1284ba6030450c8cc0e722a1c49e60e93a4b716229777019d2d382c1543c96f3a9a70650371abe18c7e21d30a4e0c00bf699a9c209@169.40.65.200:30303",
       "pubkey": "43835e78df4becff1d918b1284ba6030450c8cc0e722a1c49e60e93a4b716229777019d2d382c1543c96f3a9a70650371abe18c7e21d30a4e0c00bf699a9c209",
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
       "ip": "169.40.65.200",
+      "port": 30303
+    },
+    {
+      "enr": "enr:-KO4QPk7njgwwN3qlt4fgkPvoWGeOGX2An1c5iqGpTWPAEdMfcKjdbtaCqam5ILqAs5dgwC7uea5pBInuFS_Sl7cdi-GAaBiUgndg2V0aMfGhAfJRi6AgmlkgnY0gmlwhKkoQe2Jc2VjcDI1NmsxoQPZP5R4WN69I45jk8M3w4ZLl3XGQPcX9chADybk3yXajYRzbmFwwIN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://d93f947858debd238e6393c337c3864b9775c640f717f5c8400f26e4df25da8daa07069a00c4a199b5fced393c43dc398ecbe645aacb277157788eb6f35c05f7@169.40.65.237:30303",
+      "pubkey": "d93f947858debd238e6393c337c3864b9775c640f717f5c8400f26e4df25da8daa07069a00c4a199b5fced393c43dc398ecbe645aacb277157788eb6f35c05f7",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "169.40.65.237",
       "port": 30303
     },
     {
@@ -302,6 +302,15 @@
       "port": 30303
     },
     {
+      "enr": "enr:-KO4QC5R0sXmNQAIPX7zxqw3N5AWGH-CpCkwAg7bnVdQW2pjZJ6ui7cJ42Xfho5ZRp6A06P3cKgcx_64pwiorcfafcCGAZXPfqklg2V0aMfGhAfJRi6AgmlkgnY0gmlwhK1FqTuJc2VjcDI1NmsxoQINY_vMyozyzW83Z_AzZF95pBOMx6gtpHzwui8Dkond54RzbmFwwIN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://0d63fbccca8cf2cd6f3767f033645f79a4138cc7a82da47cf0ba2f039289dde7d251875d1013f3c5d4be837bd89fe2c7ebb76ad113245d82e8fb3c6dc63074ae@173.69.169.59:30303",
+      "pubkey": "0d63fbccca8cf2cd6f3767f033645f79a4138cc7a82da47cf0ba2f039289dde7d251875d1013f3c5d4be837bd89fe2c7ebb76ad113245d82e8fb3c6dc63074ae",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "173.69.169.59",
+      "port": 30303
+    },
+    {
       "enr": "enr:-KO4QKj-XtveV0DXqGvzP9HlueWy_PvJ5WK7rHl7oWhHExeUWeaERcn8reHQCIpAmLa_zrwluve2qKiUFK5MsJQmiy-GAYPW4rRbg2V0aMfGhAfJRi6AgmlkgnY0gmlwhK99zBqJc2VjcDI1NmsxoQNyH_SJnt9VFdMcoOdj31W7vmoCcJ8d3K5bHMuG1XmryIRzbmFwwIN0Y3CCdl-DdWRwgnZf",
       "enode": "enode://721ff4899edf5515d31ca0e763df55bbbe6a02709f1ddcae5b1ccb86d579abc80c30acdfe32687fef20482f0930ff91b92bac778ccaf21ebe7f6b6da5f75aeff@175.125.204.26:30303",
       "pubkey": "721ff4899edf5515d31ca0e763df55bbbe6a02709f1ddcae5b1ccb86d579abc80c30acdfe32687fef20482f0930ff91b92bac778ccaf21ebe7f6b6da5f75aeff",
@@ -329,21 +338,30 @@
       "port": 30303
     },
     {
+      "enr": "enr:-KO4QAME2DNF1QfOBjGATcTcPmuf2X_xVYzqgTcX2fA-cAsiKqJhKV4yROaaTuK0cFXpPSre4hWN5YCGX-ZghlhpjuiGAZ9bo1Gjg2V0aMfGhAfJRi6AgmlkgnY0gmlwhLJfmN2Jc2VjcDI1NmsxoQOMyuq0YD2MEcg5yTnCKj3EFydcoQxv2nGjdRG7_J-oZoRzbmFwwIN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://8ccaeab4603d8c11c839c939c22a3dc417275ca10c6fda71a37511bbfc9fa86683dc91e047149faa851a01f46a06718e74844a7446fade82c4f378ffd6d53d37@178.95.152.221:30303",
+      "pubkey": "8ccaeab4603d8c11c839c939c22a3dc417275ca10c6fda71a37511bbfc9fa86683dc91e047149faa851a01f46a06718e74844a7446fade82c4f378ffd6d53d37",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "178.95.152.221",
+      "port": 30303
+    },
+    {
+      "enr": "enr:-KO4QIGU6ERJqHDLDBllxSlMDqi4M-XhQKLHFu3OiT3DcrfsWZ48gdDg0NZhajvIWQwZnfdAxzm18biJ05So9T2k7JuGAaBrehEhg2V0aMfGhAfJRi6AgmlkgnY0gmlwhLJfmCqJc2VjcDI1NmsxoQJIy1JbJJpNxnHYisZF2cpvDiJ6VTBGmqAE7Ge9qUALJIRzbmFwwIN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://48cb525b249a4dc671d88ac645d9ca6f0e227a5530469aa004ec67bda9400b240b325893a14c7e70a536acb0cb518d70b5636659531eb18e5bd43a2c437e0e38@178.95.152.42:30303",
+      "pubkey": "48cb525b249a4dc671d88ac645d9ca6f0e227a5530469aa004ec67bda9400b240b325893a14c7e70a536acb0cb518d70b5636659531eb18e5bd43a2c437e0e38",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "178.95.152.42",
+      "port": 30303
+    },
+    {
       "enr": "enr:-KO4QFH1eiALxUA7anG3x_xh8X-8IyMuqNQ2slvt63XPY9hoR5nNZKEkqKUL0i41zNPRXTH8VzAoyUdk1YXP33PhGAiGAZz5woFYg2V0aMfGhAfJRi6AgmlkgnY0gmlwhBKGg4eJc2VjcDI1NmsxoQOSeCHJGozrAM_a7FOeABZ693orbZt9XJrgSEiRivVeDYRzbmFwwIN0Y3CCdl-DdWRwgnZf",
       "enode": "enode://927821c91a8ceb00cfdaec539e00167af77a2b6d9b7d5c9ae04848918af55e0de5f4b0d3886f729cf378cff4ff3bbbc87c712164a473449bca6a739304c7d19b@18.134.131.135:30303",
       "pubkey": "927821c91a8ceb00cfdaec539e00167af77a2b6d9b7d5c9ae04848918af55e0de5f4b0d3886f729cf378cff4ff3bbbc87c712164a473449bca6a739304c7d19b",
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
       "ip": "18.134.131.135",
-      "port": 30303
-    },
-    {
-      "enr": "enr:-KO4QA8PI22zmjNzdsFhKji5C3WHyF1F9f7nU1JlVt7V72vle-YiPIzE11mL8WgX1F-eY8TUvNXb7H3BH6i3Xvth1zaGAaD2RQ5Ug2V0aMfGhAfJRi6AgmlkgnY0gmlwhBKMYi2Jc2VjcDI1NmsxoQKLWHXvJjhfHr5-KGO1tnra5mfdrQLujx63mr3dRJIzxYRzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://8b5875ef26385f1ebe7e2863b5b67adae667ddad02ee8f1eb79abddd449233c5721279f9515adf65764f1c899daacdbb449cad0e70ccb61a072db7ec261ab6ee@18.140.98.45:30303",
-      "pubkey": "8b5875ef26385f1ebe7e2863b5b67adae667ddad02ee8f1eb79abddd449233c5721279f9515adf65764f1c899daacdbb449cad0e70ccb61a072db7ec261ab6ee",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "18.140.98.45",
       "port": 30303
     },
     {
@@ -374,12 +392,12 @@
       "port": 30303
     },
     {
-      "enr": "enr:-KO4QIoHpb7SsdZluZRr0FHQIYQKBgVvFYwJ-dto5Uf7ixPhOCzMZiEtvcj7oHj-EMqaEJC1GiWWvC6g0U8C5t1-TBGGAaD2OqiJg2V0aMfGhAfJRi6AgmlkgnY0gmlwhBLJ24mJc2VjcDI1NmsxoQK_SgRtjVX2IutAF71hqkxO2dcwUCNwGo1Me5hfxR6a9YRzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://bf4a046d8d55f622eb4017bd61aa4c4ed9d7305023701a8d4c7b985fc51e9af5d09dfce3955bda419e626db6088f6a752053fc986131aac00450200cda62cd48@18.201.219.137:30303",
-      "pubkey": "bf4a046d8d55f622eb4017bd61aa4c4ed9d7305023701a8d4c7b985fc51e9af5d09dfce3955bda419e626db6088f6a752053fc986131aac00450200cda62cd48",
+      "enr": "enr:-KO4QAIwgqqgyIh4kAuDhhshR3O8Bv8uRw3YjjlQtLF7Pqz3K_MNrHaGw9yfJFwNV6laulCd4gsVU9TAJyGg_RJIbKiGAaDuW7T3g2V0aMfGhAfJRi6AgmlkgnY0gmlwhBK3kvaJc2VjcDI1NmsxoQLmsXBx0kxS9ywqI7euhk9GCi78UVgLOWlBhWb8g17C_oRzbmFwwIN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://e6b17071d24c52f72c2a23b7ae864f460a2efc51580b3969418566fc835ec2fef85f3ba32c17777a4c29332f765f1ada7d8787b2d3e608177d0401704991209a@18.183.146.246:30303",
+      "pubkey": "e6b17071d24c52f72c2a23b7ae864f460a2efc51580b3969418566fc835ec2fef85f3ba32c17777a4c29332f765f1ada7d8787b2d3e608177d0401704991209a",
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "18.201.219.137",
+      "ip": "18.183.146.246",
       "port": 30303
     },
     {
@@ -482,15 +500,6 @@
       "port": 30303
     },
     {
-      "enr": "enr:-J24QB9OvJkCkVkFay52ft70Z9nE3m_V9gx64lDLdX-veK-4DEg3E_jY0rhwvRw0joD7bGZIjXW6mFLoyKR1y0c1Sj2GAZ_bXO3Zg2V0aMfGhAfJRi6AgmlkgnY0gmlwhNGF07KJc2VjcDI1NmsxoQOqOtSEBKLIro1JJw-XZnXuXNEq_UZJ2A5A__tWmwUHtIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://aa3ad48404a2c8ae8d49270f976675ee5cd12afd4649d80e40fffb569b0507b4d06f0d8a59b0138a21388b65a3a51898fb59b8fd1f1dd7c65f80edbc0218e863@209.133.211.178:30303",
-      "pubkey": "aa3ad48404a2c8ae8d49270f976675ee5cd12afd4649d80e40fffb569b0507b4d06f0d8a59b0138a21388b65a3a51898fb59b8fd1f1dd7c65f80edbc0218e863",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "209.133.211.178",
-      "port": 30303
-    },
-    {
       "enr": "enr:-KO4QMlUJg5QtQzgrXowwAzvuBUhSUDbABHluOT0EhgYhJBKGMjntTJWaTGsJdBsev3ez8P0jVB-OtFdjwWlaWLogieGAZD_6oT1g2V0aMfGhAfJRi6AgmlkgnY0gmlwhNX2J8uJc2VjcDI1NmsxoQKBzSqVYNo6V-yCiyWfJKL_mRVXC1g4dPX6T1od-pMng4RzbmFwwIN0Y3CCdl-DdWRwgnZf",
       "enode": "enode://81cd2a9560da3a57ec828b259f24a2ff9915570b583874f5fa4f5a1dfa9327833fe126f71a2872700cc8006bfbad8a88219e174ac26508d5399f1ba4aa3f97d8@213.246.39.203:30303",
       "pubkey": "81cd2a9560da3a57ec828b259f24a2ff9915570b583874f5fa4f5a1dfa9327833fe126f71a2872700cc8006bfbad8a88219e174ac26508d5399f1ba4aa3f97d8",
@@ -527,30 +536,12 @@
       "port": 30303
     },
     {
-      "enr": "enr:-KO4QIZ1DYPPlORcrscknPOKkoCyKIcVdg7KXwo0EDO7LOAWBTAFeNfzRKvsMpQ4yfS1wOCeHrn7LBUpEG0-JZFAFLCGAaGl0NDBg2V0aMfGhAfJRi6AgmlkgnY0gmlwhAMlN5GJc2VjcDI1NmsxoQJ5flalhMyoKXDJ_SXu92UaWIrWRJ98w2PDLgfJF-GCp4RzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://797e56a584cca82970c9fd25eef7651a588ad6449f7cc363c32e07c917e182a72ed86e98a85e2eadc40360bdaa281cd7361fd5547229a3250a9f71c0b7ebb1ae@3.37.55.145:30303",
-      "pubkey": "797e56a584cca82970c9fd25eef7651a588ad6449f7cc363c32e07c917e182a72ed86e98a85e2eadc40360bdaa281cd7361fd5547229a3250a9f71c0b7ebb1ae",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "3.37.55.145",
-      "port": 30303
-    },
-    {
       "enr": "enr:-KO4QOj29_iU3eZuOUy4OASJwgaLuqAvRJWo5rR1FMs382y1YG0j4O5yViDDW2ia-1y_dq8cTqMY4QvAn9gYWcYpchCGAZx4iGWhg2V0aMfGhAfJRi6AgmlkgnY0gmlwhAMI1wGJc2VjcDI1NmsxoQLBZZQYq_O4-wEcEZKe9EptJ5ZsO6pDqNX_txys908yw4RzbmFwwIN0Y3CCdl-DdWRwgnZf",
       "enode": "enode://c1659418abf3b8fb011c11929ef44a6d27966c3baa43a8d5ffb71cacf74f32c3c7b460aeed44797667b2298a7603beaa912d5f78a09500f48d66bd83a74fe9da@3.8.215.1:30303",
       "pubkey": "c1659418abf3b8fb011c11929ef44a6d27966c3baa43a8d5ffb71cacf74f32c3c7b460aeed44797667b2298a7603beaa912d5f78a09500f48d66bd83a74fe9da",
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
       "ip": "3.8.215.1",
-      "port": 30303
-    },
-    {
-      "enr": "enr:-KO4QIUnPfw7wPFYHeruabwLyLf4WIiXRz5UkhxP1-RRQuTiUtzyaVdBpTNS0Uw8TkS6jeGPTp1QLr-xBxU1xEui5yuGAaEgk8IDg2V0aMfGhAfJRi6AgmlkgnY0gmlwhANeZk6Jc2VjcDI1NmsxoQMO-4QtuFInmgMi8XLxDzoW519cElBMyRjhgtx2Usu3PYRzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://0efb842db852279a0322f172f10f3a16e75f5c12504cc918e182dc7652cbb73d2a6ca96f2da54616b35bcdf9301ba22f6d3725384748bc69e091dddf36077dfb@3.94.102.78:30303",
-      "pubkey": "0efb842db852279a0322f172f10f3a16e75f5c12504cc918e182dc7652cbb73d2a6ca96f2da54616b35bcdf9301ba22f6d3725384748bc69e091dddf36077dfb",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "3.94.102.78",
       "port": 30303
     },
     {
@@ -581,15 +572,6 @@
       "port": 30303
     },
     {
-      "enr": "enr:-KO4QFRV2nyZ3PeGeZ6RwSP5gHhO2PxdnghwBrwUNketsWgAJtV7E3yA6Gz_OtF31c3pv-SCkPSi-i1JR5er1B6v8UWGAaEhbM1tg2V0aMfGhAfJRi6AgmlkgnY0gmlwhCLP7OeJc2VjcDI1NmsxoQJKaz1FsAM7S9w1RBJ6EtAvObkgjjLdI0EjemMw1Y_9QIRzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://4a6b3d45b0033b4bdc3544127a12d02f39b9208e32dd2341237a6330d58ffd40c58bc02b24a68ef9de2f1b6e8f3a19ed93f016216999e53c026cf2e3ba4025e6@34.207.236.231:30303",
-      "pubkey": "4a6b3d45b0033b4bdc3544127a12d02f39b9208e32dd2341237a6330d58ffd40c58bc02b24a68ef9de2f1b6e8f3a19ed93f016216999e53c026cf2e3ba4025e6",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "34.207.236.231",
-      "port": 30303
-    },
-    {
       "enr": "enr:-Je4QJsABQeKxwrtpBkzcxpzikXfMj4Kwt15olYOvmQeDvIdQjZ_H7QHIc0iQtq3xl3cKYpvD4XZ-1JGnfGtNXHmHGMQg2V0aMfGhAfJRi6AgmlkgnY0gmlwhCJPbxSJc2VjcDI1NmsxoQIEDaFLYajR41nep8Bbh2YphDKJj4mGVuCXX6KJAyigzIN0Y3CCdl-DdWRwgnZf",
       "enode": "enode://040da14b61a8d1e359dea7c05b8766298432898f898656e0975fa2890328a0cc60774fd92546ed05637f0bc954800f5f3cbaaf2c2d3046261c4eb5e4d3d79772@34.79.111.20:30303",
       "pubkey": "040da14b61a8d1e359dea7c05b8766298432898f898656e0975fa2890328a0cc60774fd92546ed05637f0bc954800f5f3cbaaf2c2d3046261c4eb5e4d3d79772",
@@ -608,12 +590,12 @@
       "port": 30303
     },
     {
-      "enr": "enr:-KO4QEFzlzLv5ferGdnzHeo0sm-c8z_c_TMDEo27DCMo1Bxmd8xOwjfEymTAoVG7_vElfWs-dF0tLYhZta8mqKguw3WGAaDsgFBDg2V0aMfGhAfJRi6AgmlkgnY0gmlwhCNP41CJc2VjcDI1NmsxoQIc46thbGVTM5-6HtLAJWZUHD6X4_sSBXMCCJNRbiaFI4RzbmFwwIN0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://1ce3ab616c6553339fba1ed2c02566541c3e97e3fb120573020893516e26852369ba36f8577f2f5426d03b6fdaf1ac65cb6631f0928e63e2239393ee9a3d5758@35.79.227.80:30303",
-      "pubkey": "1ce3ab616c6553339fba1ed2c02566541c3e97e3fb120573020893516e26852369ba36f8577f2f5426d03b6fdaf1ac65cb6631f0928e63e2239393ee9a3d5758",
+      "enr": "enr:-Je4QEI-RRhpJs2pfjLZr26tcfYF9gdvii__5YmotGeMHTYjVo4HrEecc5m8ew1NXBNXZhGirpDR3ZfkZOXdj2C0TDUCg2V0aMfGhAfJRi6AgmlkgnY0gmlwhCUbe2SJc2VjcDI1NmsxoQMr97tL1uzNXHrbkI3gqny6cAFPuvsWYQVOzh1WSbdlpIN0Y3CCdl-DdWRwgiPw",
+      "enode": "enode://2bf7bb4bd6eccd5c7adb908de0aa7cba70014fbafb1661054ece1d5649b765a45d0fd7622c0f9742e1a350444c7d27d49e50ae1379ad0ecf083ed0760ccac543@37.27.123.100:30303?discport=9200",
+      "pubkey": "2bf7bb4bd6eccd5c7adb908de0aa7cba70014fbafb1661054ece1d5649b765a45d0fd7622c0f9742e1a350444c7d27d49e50ae1379ad0ecf083ed0760ccac543",
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "35.79.227.80",
+      "ip": "37.27.123.100",
       "port": 30303
     },
     {
@@ -623,15 +605,6 @@
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
       "ip": "40.160.31.213",
-      "port": 30303
-    },
-    {
-      "enr": "enr:-J24QHvbtXwxNBZWUYc2K-0CrCc66V0pYe5bTPju6Kej4mCRIZrgTK-b4W4A6XE-GjebjBothbq0eer3ak3-10Dw0CWGAaGyc3Y_g2V0aMfGhAfJRi6AgmlkgnY0gmlwhC4LSNCJc2VjcDI1NmsxoQMuyhpr3CZsfnvxT5Lp-ZcX0DNmPGg4HGIkyrMxj8rOa4N0Y3CCdl-DdWRwgnZf",
-      "enode": "enode://2eca1a6bdc266c7e7bf14f92e9f99717d033663c68381c6224cab3318fcace6b768bbb4481b29efe7e9e484f800d021478f1d1a59810e3be3f5845d6ff143905@46.11.72.208:30303",
-      "pubkey": "2eca1a6bdc266c7e7bf14f92e9f99717d033663c68381c6224cab3318fcace6b768bbb4481b29efe7e9e484f800d021478f1d1a59810e3be3f5845d6ff143905",
-      "score": 0,
-      "lastResponse": "0001-01-01T00:00:00Z",
-      "ip": "46.11.72.208",
       "port": 30303
     },
     {
@@ -650,6 +623,15 @@
       "score": 0,
       "lastResponse": "0001-01-01T00:00:00Z",
       "ip": "47.129.87.1",
+      "port": 30303
+    },
+    {
+      "enr": "enr:-J24QB0X5ljzCzOuH_-wSHZPlY7nRQ-PG5A_l0WSbjIohuxTd0cI5p1OW6yMYOs8tOR5UvXXKG81AWsy488R4RHBVymGAZ9U8S3tg2V0aMfGhAfJRi6AgmlkgnY0gmlwhC_ylyuJc2VjcDI1NmsxoQPiedL81IzwkpIpBdo9_opMU2HC46f5nuT-5GgzlMyuEoN0Y3CCdl-DdWRwgnZf",
+      "enode": "enode://e279d2fcd48cf092922905da3dfe8a4c5361c2e3a7f99ee4fee4683394ccae129f501e714bae3d1cf427227ec5524eb4a5307a00ab4b79061780baea8bbc7f17@47.242.151.43:30303",
+      "pubkey": "e279d2fcd48cf092922905da3dfe8a4c5361c2e3a7f99ee4fee4683394ccae129f501e714bae3d1cf427227ec5524eb4a5307a00ab4b79061780baea8bbc7f17",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "47.242.151.43",
       "port": 30303
     },
     {
@@ -750,6 +732,15 @@
       "lastResponse": "0001-01-01T00:00:00Z",
       "ip": "202.73.37.239",
       "port": 30403
+    },
+    {
+      "enr": "enr:-J24QAQ0Qu2pi0NRLEhAdiImQpdVCR0JwglX_7PId4_dhb4qby6SIEB5UdFRLZ6NIcka0mVNSoLUEIU1_KREZj_7ggSGAaFjw3vYg2V0aMfGhAfJRi6AgmlkgnY0gmlwhLg4J2yJc2VjcDI1NmsxoQLZdGtnjs4wVqcW4xDxHGlANzyPSmi1ZrlDgR2S877nMYN0Y3CCdsSDdWRwgnbE",
+      "enode": "enode://d9746b678ece3056a716e310f11c6940373c8f4a68b566b943811d92f3bee7313ccd84ca8e5daf032202d10b52849fb3db837b12afe3388d72e78a6523b7df02@184.56.39.108:30404",
+      "pubkey": "d9746b678ece3056a716e310f11c6940373c8f4a68b566b943811d92f3bee7313ccd84ca8e5daf032202d10b52849fb3db837b12afe3388d72e78a6523b7df02",
+      "score": 0,
+      "lastResponse": "0001-01-01T00:00:00Z",
+      "ip": "184.56.39.108",
+      "port": 30404
     },
     {
       "enr": "enr:-KO4QAB740XFDGmiuf3xNzReACulAOQFGKolD_7918rMvaYVT15dAHQ3YbraXlJSyz6scQyeGwC_m6EaJI8q-jmmcwmGAZciRcXIg2V0aMfGhAfJRi6AgmlkgnY0gmlwhMYsgfKJc2VjcDI1NmsxoQMVZP_dGeiCgFbXJyMfAiHYTMVjoI4CLmluYIIlRCTOZIRzbmFwwIN0Y3CCe6-DdWRwgnuv",
